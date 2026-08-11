@@ -1,0 +1,127 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (getUserData().role == 'admin' && getUserData().status != 'DISABLED' && getUserData().status != 'SUSPENDED') ||
+        request.auth.token.email == 'shahtohid722@gmail.com' ||
+        request.auth.token.email == 'admin@chenabmedia.com'
+      );
+    }
+
+    function isExecutive() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (getUserData().role == 'executive' && getUserData().status != 'DISABLED' && getUserData().status != 'SUSPENDED')
+      );
+    }
+
+    function isArtist() {
+      return isSignedIn() && getUserData().role == 'artist' && getUserData().status != 'DISABLED';
+    }
+
+    // Default deny rule
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow get: if isUser(userId) || isExecutive();
+      allow list: if isExecutive();
+      allow create: if isUser(userId) 
+        && request.resource.data.role == 'artist'
+        && request.resource.data.uid == userId;
+      allow update: if (isUser(userId) 
+        && request.resource.data.role == resource.data.role // Cannot change role
+        && (!('permissions' in resource.data) || request.resource.data.permissions == resource.data.permissions) // Cannot modify permissions
+        && request.resource.data.uid == resource.data.uid)
+        || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Public catalog collections (Artists, Releases, Journal)
+    match /artists/{artistId} {
+      allow read: if true;
+      allow create, delete: if isExecutive();
+      allow update: if isExecutive() || (
+        isSignedIn() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.status == resource.data.status &&
+        (!('catalogueNumberPrefix' in resource.data) || request.resource.data.catalogueNumberPrefix == resource.data.catalogueNumberPrefix) &&
+        (!('legalName' in resource.data) || request.resource.data.legalName == resource.data.legalName) &&
+        (!('email' in resource.data) || request.resource.data.email == resource.data.email) &&
+        (!('phone' in resource.data) || request.resource.data.phone == resource.data.phone)
+      );
+    }
+
+    match /releases/{releaseId} {
+      allow read: if true;
+      allow write: if isExecutive();
+    }
+
+    match /smartLinks/{smartLinkId} {
+      allow read: if true;
+      allow write: if isExecutive();
+    }
+
+    match /smartLinkEvents/{eventId} {
+      allow create: if true;
+      allow read, update, delete: if isExecutive();
+    }
+
+    match /journal/{postId} {
+      allow read: if true;
+      allow write: if isExecutive();
+    }
+
+    // Contact Submissions (Anyone can submit, Executives/Admins can read/manage)
+    match /contactSubmissions/{submissionId} {
+      allow create: if true;
+      allow read, update, delete: if isExecutive();
+    }
+
+    // Demo Submissions (Anyone can submit, Executives/Admins can read/manage)
+    match /demoSubmissions/{demoId} {
+      allow create: if true;
+      allow read, update, delete: if isExecutive();
+    }
+
+    // User Notifications
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (
+        resource.data.recipientUid == request.auth.uid ||
+        resource.data.userId == request.auth.uid
+      );
+      allow update: if (
+        isSignedIn() && (
+          resource.data.recipientUid == request.auth.uid ||
+          resource.data.userId == request.auth.uid
+        ) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'updatedAt'])
+      ) || isExecutive();
+      allow create, delete: if isExecutive();
+    }
+
+    // Audit Logs
+    match /auditLogs/{logId} {
+      allow read: if isExecutive();
+      allow write: if isAdmin();
+    }
+  }
+}

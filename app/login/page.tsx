@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { UserProfile } from '@/types/auth';
 import {
   Lock,
   ArrowRight,
@@ -16,10 +17,49 @@ import {
   Key,
 } from 'lucide-react';
 
-export default function LoginPage() {
+function resolveTargetPortal(userProfile: UserProfile | null, redirectParam?: string | null): string | null {
+  if (!userProfile) return null;
+
+  if (userProfile.status === 'DISABLED' || userProfile.status === 'SUSPENDED') {
+    return null;
+  }
+
+  const role = userProfile.role;
+  const defaultPortal = role === 'admin' ? '/admin' : role === 'executive' ? '/executive' : '/artist';
+
+  if (!redirectParam) return defaultPortal;
+
+  let decoded = redirectParam.trim();
+  try {
+    decoded = decodeURIComponent(redirectParam).trim();
+  } catch {
+    // fallback
+  }
+
+  // Ensure redirectParam is a safe relative path
+  if (!decoded.startsWith('/') || decoded.startsWith('//') || decoded === '/login' || decoded === '/') {
+    return defaultPortal;
+  }
+
+  // Validate path permission based on role
+  if (role === 'admin' && decoded.startsWith('/admin')) {
+    return decoded;
+  }
+  if (role === 'executive' && (decoded.startsWith('/executive') || decoded.startsWith('/admin'))) {
+    return decoded;
+  }
+  if (role === 'artist' && decoded.startsWith('/artist')) {
+    return decoded;
+  }
+
+  return defaultPortal;
+}
+
+function LoginContent() {
   const {
     user,
     userProfile,
+    loading,
     signIn,
     signOut,
     resetPassword,
@@ -28,6 +68,8 @@ export default function LoginPage() {
   } = useAuth();
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get('redirect');
 
   const [mode, setMode] = useState<'signin' | 'forgot'>('signin');
   const [email, setEmail] = useState('');
@@ -35,6 +77,16 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // Auto-redirect if user is already authenticated with an active profile
+  useEffect(() => {
+    if (!loading && user && userProfile && userProfile.status !== 'DISABLED' && userProfile.status !== 'SUSPENDED') {
+      const destination = resolveTargetPortal(userProfile, redirectParam);
+      if (destination) {
+        router.replace(destination);
+      }
+    }
+  }, [loading, user, userProfile, router, redirectParam]);
 
   const handleToggleMode = (newMode: 'signin' | 'forgot') => {
     setMode(newMode);
@@ -51,8 +103,11 @@ export default function LoginPage() {
 
     try {
       if (mode === 'signin') {
-        await signIn(email, password);
-        router.push('/');
+        const profile = await signIn(email, password);
+        if (profile && profile.status !== 'DISABLED' && profile.status !== 'SUSPENDED') {
+          const destination = resolveTargetPortal(profile, redirectParam) || '/admin';
+          router.replace(destination);
+        }
       } else if (mode === 'forgot') {
         await resetPassword(email);
         setSuccessNotice(
@@ -97,7 +152,7 @@ export default function LoginPage() {
     );
   }
 
-  if (user && userProfile?.status === 'DISABLED') {
+  if (user && (userProfile?.status === 'DISABLED' || userProfile?.status === 'SUSPENDED')) {
     return (
       <div className="max-w-md mx-auto px-6 py-16 space-y-8 font-mono">
         <div className="text-center space-y-3">
@@ -127,12 +182,13 @@ export default function LoginPage() {
 
   if (user && userProfile) {
     const roleBadge = userProfile.role.toUpperCase();
-    const portalLink =
+    const portalLink = resolveTargetPortal(userProfile, redirectParam) || (
       userProfile.role === 'admin'
         ? '/admin'
         : userProfile.role === 'executive'
         ? '/executive'
-        : '/artist';
+        : '/artist'
+    );
 
     return (
       <div className="max-w-md mx-auto px-6 py-16 space-y-8 font-mono">
@@ -309,5 +365,22 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 space-y-4 font-mono">
+          <Loader2 className="w-8 h-8 text-[#F5F5F5] animate-spin" />
+          <p className="text-xs uppercase tracking-widest text-[#888888]">
+            VERIFYING CHENAB SESSION...
+          </p>
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }

@@ -22,9 +22,9 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   loading: boolean;
   error: string | null;
-  signIn: (email: string, pass: string) => Promise<void>;
+  signIn: (email: string, pass: string) => Promise<UserProfile | null>;
   signUp: (email: string, pass: string, displayName?: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: () => Promise<UserProfile | null>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
@@ -114,11 +114,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const signIn = async (email: string, pass: string) => {
+  const signIn = async (email: string, pass: string): Promise<UserProfile | null> => {
     setError(null);
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), pass);
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), pass);
+      const profile = await syncUserProfile(userCredential.user);
+      setUser(userCredential.user);
+      setUserProfile(profile);
+      return profile;
     } catch (err: any) {
       console.error('Sign in error:', err);
       let userFriendlyMessage = 'Failed to authenticate. Please verify your credentials.';
@@ -142,11 +146,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     throw new Error(msg);
   };
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (): Promise<UserProfile | null> => {
     setError(null);
     setLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
+      const userCredential = await signInWithPopup(auth, googleProvider);
+      const profile = await syncUserProfile(userCredential.user);
+      setUser(userCredential.user);
+      setUserProfile(profile);
+      return profile;
     } catch (err: any) {
       console.error('Google Auth Error:', err);
       if (err.code === 'auth/popup-closed-by-user') {

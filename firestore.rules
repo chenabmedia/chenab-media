@@ -44,9 +44,10 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isUser(userId) || isExecutive();
       allow list: if isExecutive();
-      allow create: if isUser(userId) 
+      allow create: if (isUser(userId) 
         && request.resource.data.role == 'artist'
-        && request.resource.data.uid == userId;
+        && request.resource.data.uid == userId)
+        || isAdmin();
       allow update: if (isUser(userId) 
         && request.resource.data.role == resource.data.role // Cannot change role
         && (!('permissions' in resource.data) || request.resource.data.permissions == resource.data.permissions) // Cannot modify permissions

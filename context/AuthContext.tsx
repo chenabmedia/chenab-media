@@ -15,6 +15,7 @@ import {
 import { getUserDocRef } from '@/lib/firebase/firestore';
 import { UserProfile } from '@/types/auth';
 import { determineInitialUserRole } from '@/lib/auth/bootstrap';
+import { ALL_PERMISSIONS } from '@/lib/auth/permissions';
 
 interface AuthContextType {
   user: User | null;
@@ -51,6 +52,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (snapshot.exists()) {
         return snapshot.data() as UserProfile;
       } else {
+        // Auto-provision bootstrap admin profile if designated super admin
+        const initialRole = determineInitialUserRole(firebaseUser.email);
+        if (initialRole === 'admin' && firebaseUser.email) {
+          const now = new Date().toISOString();
+          const adminProfile: UserProfile = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email.toLowerCase().trim(),
+            displayName: firebaseUser.displayName || 'Zaazze (Super Admin)',
+            photoURL: firebaseUser.photoURL || null,
+            role: 'admin',
+            status: 'ACTIVE',
+            permissions: ALL_PERMISSIONS,
+            createdAt: now,
+            updatedAt: now,
+            createdBy: 'system_bootstrap',
+          };
+          try {
+            await setDoc(userRef, adminProfile, { merge: true });
+            return adminProfile;
+          } catch (createErr) {
+            console.warn('Failed to persist bootstrap admin profile to Firestore:', createErr);
+            return adminProfile;
+          }
+        }
         // Public registration disabled: do not auto-create profile.
         return null;
       }

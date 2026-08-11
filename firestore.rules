@@ -18,6 +18,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         (getUserData().role == 'admin' && getUserData().status != 'DISABLED' && getUserData().status != 'SUSPENDED') ||
+        request.auth.token.email == 'zaazze@chenabmedia.in' ||
         request.auth.token.email == 'shahtohid722@gmail.com' ||
         request.auth.token.email == 'admin@chenabmedia.com'
       );

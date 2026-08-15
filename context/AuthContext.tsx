@@ -164,6 +164,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         userFriendlyMessage = 'Access temporarily locked due to consecutive failed attempts. Try again later.';
       } else if (err.code === 'auth/user-disabled') {
         userFriendlyMessage = 'This portal user account has been suspended by CHENAB A&R administration.';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        userFriendlyMessage = 'Email/Password authentication is disabled for this project. Please sign in with Google or enable Email/Password provider in the Firebase Authentication console.';
+      } else if (err.message) {
+        userFriendlyMessage = err.message;
       }
       setError(userFriendlyMessage);
       throw new Error(userFriendlyMessage);
@@ -189,14 +193,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return profile;
     } catch (err: any) {
       console.error('Google Auth Error:', err);
+      let userFriendlyMessage = 'Failed to authenticate via Google Sign-In.';
       if (err.code === 'auth/popup-closed-by-user') {
-        setError('Google Sign-In prompt was cancelled before completion.');
+        userFriendlyMessage = 'Google Sign-In prompt was closed before completion.';
       } else if (err.code === 'auth/popup-blocked') {
-        setError('Popup was blocked by the browser. Please allow popups for authentication.');
-      } else {
-        setError('Failed to authenticate via Google Sign-In.');
+        userFriendlyMessage = 'Popup was blocked by the browser. Please allow popups for authentication.';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        userFriendlyMessage = 'Google Sign-In is not enabled for this project. Please ensure Google provider is enabled in the Firebase Authentication console.';
+      } else if (err.message) {
+        userFriendlyMessage = err.message;
       }
-      throw err;
+      setError(userFriendlyMessage);
+      throw new Error(userFriendlyMessage);
     } finally {
       setLoading(false);
     }

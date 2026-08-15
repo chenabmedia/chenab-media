@@ -4,23 +4,30 @@ import { db } from './firebase/firestore';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export async function getSiteConfig(): Promise<SiteConfig> {
-  try {
-    if (adminDb) {
-      const docRef = adminDb.collection('siteConfig').doc('global');
-      const docSnap = await docRef.get();
-      if (docSnap.exists) {
-        return { ...DEFAULT_SITE_CONFIG, ...(docSnap.data() as SiteConfig) };
-      }
-    } else if (db) {
+  if (db) {
+    try {
       const docRef = doc(db, 'siteConfig', 'global');
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         return { ...DEFAULT_SITE_CONFIG, ...(docSnap.data() as SiteConfig) };
       }
+    } catch {
+      // Fall through to adminDb or default
     }
-  } catch (error) {
-    console.warn('Failed to fetch site config from Firestore, falling back to defaults:', error);
   }
+
+  if (adminDb) {
+    try {
+      const docRef = adminDb.collection('siteConfig').doc('global');
+      const docSnap = await docRef.get();
+      if (docSnap.exists) {
+        return { ...DEFAULT_SITE_CONFIG, ...(docSnap.data() as SiteConfig) };
+      }
+    } catch {
+      // Fall through to default
+    }
+  }
+
   return DEFAULT_SITE_CONFIG;
 }
 

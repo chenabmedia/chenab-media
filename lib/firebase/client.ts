@@ -1,36 +1,45 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import appletConfig from '@/firebase-applet-config.json';
 
 /**
  * Centralized Next.js Firebase Client Initialization
  * 
- * Uses Next.js NEXT_PUBLIC_ environment variables for credentials with safe fallback
- * to prevent module-level crashes during build or initial startup.
+ * Uses firebase-applet-config.json or Next.js NEXT_PUBLIC_ environment variables
+ * for credentials with safe fallback to prevent module-level crashes during build or initial startup.
  */
 
 const getFirebaseConfig = () => {
+  const cfg = appletConfig as Record<string, string>;
+
   const apiKey =
+    cfg.apiKey ||
     process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
     'AIzaSyDemoPlaceholderKeyForChenabMediaApp';
 
   const authDomain =
+    cfg.authDomain ||
     process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ||
-    'chenabmedia-in.firebaseapp.com';
+    'collective-serenity-56shk.firebaseapp.com';
 
   const projectId =
+    cfg.projectId ||
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
-    'chenabmedia-in';
+    'collective-serenity-56shk';
 
   const storageBucket =
+    cfg.storageBucket ||
     process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
-    'chenabmedia-in.appspot.com';
+    'collective-serenity-56shk.firebasestorage.app';
 
   const messagingSenderId =
+    cfg.messagingSenderId ||
     process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ||
-    '1234567890';
+    '1081053147389';
 
   const appId =
+    cfg.appId ||
     process.env.NEXT_PUBLIC_FIREBASE_APP_ID ||
-    '1:1234567890:web:chenabmediaapp';
+    '1:1081053147389:web:42aaeb0414e0539490ce94';
 
   return {
     apiKey,

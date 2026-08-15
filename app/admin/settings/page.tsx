@@ -2,8 +2,11 @@
 
 import React from 'react';
 import { Settings, Shield, Globe, Lock } from 'lucide-react';
+import appletConfig from '@/firebase-applet-config.json';
 
 export default function AdminSettingsPage() {
+  const projectId = (appletConfig as Record<string, string>)?.projectId || 'collective-serenity-56shk';
+
   return (
     <div className="max-w-3xl space-y-8 font-mono text-xs">
       <div className="border-b border-[#1A1A1A] pb-6">
@@ -25,7 +28,7 @@ export default function AdminSettingsPage() {
         <div className="space-y-3 text-[#888888]">
           <div className="flex justify-between border-b border-[#141414] pb-2">
             <span>PROJECT ID:</span>
-            <code className="text-[#F5F5F5]">chenabmedia-in</code>
+            <code className="text-[#F5F5F5]">{projectId}</code>
           </div>
           <div className="flex justify-between border-b border-[#141414] pb-2">
             <span>FIREBASE ADMIN SDK:</span>
@@ -40,3 +43,4 @@ export default function AdminSettingsPage() {
     </div>
   );
 }
+

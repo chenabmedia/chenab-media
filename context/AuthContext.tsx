@@ -14,7 +14,7 @@ import {
 } from '@/lib/firebase/auth';
 import { getUserDocRef } from '@/lib/firebase/firestore';
 import { UserProfile } from '@/types/auth';
-import { determineInitialUserRole } from '@/lib/auth/bootstrap';
+import { determineInitialUserRole, isSuperAdminEmail, createSuperAdminProfile } from '@/lib/auth/bootstrap';
 import { ALL_PERMISSIONS } from '@/lib/auth/permissions';
 
 interface AuthContextType {
@@ -46,41 +46,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const syncUserProfile = async (firebaseUser: User): Promise<UserProfile | null> => {
     const userRef = getUserDocRef(firebaseUser.uid);
+    const isSuperAdmin = isSuperAdminEmail(firebaseUser.email);
+
     try {
       const snapshot = await getDoc(userRef);
 
       if (snapshot.exists()) {
-        return snapshot.data() as UserProfile;
-      } else {
-        // Auto-provision bootstrap admin profile if designated super admin
-        const initialRole = determineInitialUserRole(firebaseUser.email);
-        if (initialRole === 'admin' && firebaseUser.email) {
-          const now = new Date().toISOString();
-          const adminProfile: UserProfile = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email.toLowerCase().trim(),
-            displayName: firebaseUser.displayName || 'Zaazze (Super Admin)',
-            photoURL: firebaseUser.photoURL || null,
-            role: 'admin',
-            status: 'ACTIVE',
-            permissions: ALL_PERMISSIONS,
-            createdAt: now,
-            updatedAt: now,
-            createdBy: 'system_bootstrap',
-          };
-          try {
-            await setDoc(userRef, adminProfile, { merge: true });
-            return adminProfile;
-          } catch (createErr) {
-            console.warn('Failed to persist bootstrap admin profile to Firestore:', createErr);
-            return adminProfile;
+        const existingData = snapshot.data() as UserProfile;
+        // If super admin email, guarantee admin role, active status and full permissions
+        if (isSuperAdmin) {
+          if (
+            existingData.role !== 'admin' ||
+            existingData.status !== 'ACTIVE' ||
+            !existingData.permissions ||
+            existingData.permissions.length === 0
+          ) {
+            const upgradedProfile: UserProfile = {
+              ...existingData,
+              role: 'admin',
+              status: 'ACTIVE',
+              permissions: ALL_PERMISSIONS,
+              updatedAt: new Date().toISOString(),
+            };
+            try {
+              await setDoc(userRef, upgradedProfile, { merge: true });
+            } catch (upErr) {
+              console.warn('Failed to upgrade super admin profile in Firestore:', upErr);
+            }
+            return upgradedProfile;
           }
         }
-        // Public registration disabled: do not auto-create profile.
+        return existingData;
+      } else {
+        // Auto-provision bootstrap admin profile if designated super admin
+        if (isSuperAdmin && firebaseUser.email) {
+          const adminProfile = createSuperAdminProfile(
+            firebaseUser.uid,
+            firebaseUser.email,
+            firebaseUser.displayName,
+            firebaseUser.photoURL
+          );
+          try {
+            await setDoc(userRef, adminProfile, { merge: true });
+          } catch (createErr) {
+            console.warn('Failed to persist bootstrap admin profile to Firestore:', createErr);
+          }
+          return adminProfile;
+        }
+        // Public registration disabled: do not auto-create profile for unprovisioned users.
         return null;
       }
     } catch (err) {
       console.warn('Could not sync user profile with Firestore:', err);
+      // Failsafe for designated super admins (e.g. zaazze@chenabmedia.in) - never block them
+      if (isSuperAdmin && firebaseUser.email) {
+        const fallbackProfile = createSuperAdminProfile(
+          firebaseUser.uid,
+          firebaseUser.email,
+          firebaseUser.displayName,
+          firebaseUser.photoURL
+        );
+        try {
+          await setDoc(userRef, fallbackProfile, { merge: true });
+        } catch (setErr) {
+          console.warn('Fallback setDoc error:', setErr);
+        }
+        return fallbackProfile;
+      }
       return null;
     }
   };

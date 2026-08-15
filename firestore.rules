@@ -11,28 +11,43 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isSuperAdminEmail() {
+      return isSignedIn() && (
+        request.auth.token.email.lower() == 'zaazze@chenabmedia.in' ||
+        request.auth.token.email.lower() == 'shahtohid722@gmail.com' ||
+        request.auth.token.email.lower() == 'admin@chenabmedia.com' ||
+        request.auth.token.email.lower() == 'aandr@chenabmedia.com'
+      );
+    }
+
+    function hasUserDoc() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function isAdmin() {
-      return isSignedIn() && (
-        (getUserData().role == 'admin' && getUserData().status != 'DISABLED' && getUserData().status != 'SUSPENDED') ||
-        request.auth.token.email == 'zaazze@chenabmedia.in' ||
-        request.auth.token.email == 'shahtohid722@gmail.com' ||
-        request.auth.token.email == 'admin@chenabmedia.com'
+      return isSuperAdminEmail() || (
+        hasUserDoc() &&
+        getUserData().role == 'admin' &&
+        getUserData().status != 'DISABLED' &&
+        getUserData().status != 'SUSPENDED'
       );
     }
 
     function isExecutive() {
-      return isSignedIn() && (
-        isAdmin() ||
-        (getUserData().role == 'executive' && getUserData().status != 'DISABLED' && getUserData().status != 'SUSPENDED')
+      return isAdmin() || (
+        hasUserDoc() &&
+        getUserData().role == 'executive' &&
+        getUserData().status != 'DISABLED' &&
+        getUserData().status != 'SUSPENDED'
       );
     }
 
     function isArtist() {
-      return isSignedIn() && getUserData().role == 'artist' && getUserData().status != 'DISABLED';
+      return hasUserDoc() && getUserData().role == 'artist' && getUserData().status != 'DISABLED';
     }
 
     // Default deny rule
@@ -45,10 +60,10 @@ service cloud.firestore {
       allow get: if isUser(userId) || isExecutive();
       allow list: if isExecutive();
       allow create: if (isUser(userId) 
-        && request.resource.data.role == 'artist'
+        && (request.resource.data.role == 'artist' || isSuperAdminEmail())
         && request.resource.data.uid == userId)
         || isAdmin();
-      allow update: if (isUser(userId) 
+      allow update: if isSuperAdminEmail() || (isUser(userId) 
         && request.resource.data.role == resource.data.role // Cannot change role
         && (!('permissions' in resource.data) || request.resource.data.permissions == resource.data.permissions) // Cannot modify permissions
         && request.resource.data.uid == resource.data.uid)
@@ -88,6 +103,12 @@ service cloud.firestore {
     }
 
     match /journal/{postId} {
+      allow read: if true;
+      allow write: if isExecutive();
+    }
+
+    // Site Config (Publicly readable, updated by Executives/Admins)
+    match /siteConfig/{configId} {
       allow read: if true;
       allow write: if isExecutive();
     }

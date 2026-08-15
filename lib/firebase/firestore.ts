@@ -1,8 +1,13 @@
 import { getFirestore, Firestore, collection, doc } from 'firebase/firestore';
 import { firebaseApp } from './client';
 import { auth } from './auth';
+import appletConfig from '@/firebase-applet-config.json';
 
-export const db: Firestore = getFirestore(firebaseApp);
+const dbId = (appletConfig as Record<string, string>)?.firestoreDatabaseId;
+
+export const db: Firestore = (dbId && dbId !== '(default)')
+  ? getFirestore(firebaseApp, dbId)
+  : getFirestore(firebaseApp);
 
 export enum OperationType {
   CREATE = 'create',

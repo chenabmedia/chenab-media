@@ -3,7 +3,8 @@ import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { db, getUserDocRef } from '@/lib/firebase/firestore';
 import { getDoc } from 'firebase/firestore';
 import { UserProfile } from '@/types/auth';
-import { AdminPermission, hasPermission } from './permissions';
+import { AdminPermission, hasPermission, ALL_PERMISSIONS } from './permissions';
+import { isSuperAdminEmail, createSuperAdminProfile } from './bootstrap';
 
 export interface ServerAuthResult {
   authenticated: boolean;
@@ -52,6 +53,8 @@ export async function verifyServerAuth(
     return { authenticated: false, user: null, profile: null, error: `Authentication token verification failed: ${err.message}` };
   }
 
+  const isSuperAdmin = isSuperAdminEmail(email);
+
   // Fetch Firestore user profile
   let profile: UserProfile | null = null;
 
@@ -71,18 +74,23 @@ export async function verifyServerAuth(
     console.warn('Could not fetch user doc in server auth check:', err);
   }
 
-  // Fallback for bootstrap admin email if doc not found
-  if (!profile) {
-    const isBootstrapAdmin =
-      email.toLowerCase() === 'zaazze@chenabmedia.in' ||
-      email.toLowerCase() === 'shahtohid722@gmail.com' ||
-      email.toLowerCase() === 'admin@chenabmedia.com';
+  // Auto-upgrade or fallback for bootstrap admin email if doc not found or incomplete
+  if (isSuperAdmin) {
+    if (!profile || profile.role !== 'admin' || profile.status !== 'ACTIVE') {
+      profile = createSuperAdminProfile(uid, email, profile?.displayName, profile?.photoURL);
+      if (adminDb) {
+        adminDb.collection('users').doc(uid).set(profile, { merge: true }).catch(err => {
+          console.warn('Server auth auto-sync of super admin failed:', err);
+        });
+      }
+    }
+  } else if (!profile) {
     profile = {
       uid,
       email,
       displayName: email.split('@')[0],
       photoURL: null,
-      role: isBootstrapAdmin ? 'admin' : 'artist',
+      role: 'artist',
       status: 'ACTIVE',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

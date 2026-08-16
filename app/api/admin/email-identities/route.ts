@@ -18,10 +18,16 @@ export async function GET(req: NextRequest) {
     let identities: EmailIdentity[] = [];
     if (adminDb) {
       const snapshot = await adminDb.collection('emailIdentities').get();
-      identities = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EmailIdentity));
+      identities = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return { ...data, id: doc.id } as EmailIdentity;
+      });
     } else if (db) {
       const snapshot = await getDocs(collection(db, 'emailIdentities'));
-      identities = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EmailIdentity));
+      identities = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return { ...data, id: doc.id } as EmailIdentity;
+      });
     }
 
     if (identities.length === 0) {

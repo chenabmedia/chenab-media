@@ -60,14 +60,19 @@ export default function AdminEmailComposePage() {
         }
 
         if (data && data.identities && Array.isArray(data.identities)) {
-          const enabledIds = data.identities.filter((i: EmailIdentity) => i.enabled !== false);
+          const mappedIdentities: EmailIdentity[] = data.identities.map((item: any) => ({
+            ...item,
+            id: item.id || item.suffix || item.email,
+          }));
+          const enabledIds = mappedIdentities.filter((i: EmailIdentity) => i.enabled !== false);
           setIdentities(enabledIds);
           if (enabledIds.length > 0) {
             setSelectedIdentityId((prev) => {
               if (prev && enabledIds.some((i: EmailIdentity) => i.id === prev)) {
                 return prev;
               }
-              return enabledIds[0].id;
+              const firstActiveChenab = enabledIds.find((i: EmailIdentity) => i.email && i.email.includes('@chenabmedia.in'));
+              return firstActiveChenab ? firstActiveChenab.id : enabledIds[0].id;
             });
           } else {
             setSelectedIdentityId('');
@@ -94,7 +99,7 @@ export default function AdminEmailComposePage() {
 
     // Client-side validation check
     if (!selectedIdentityId) {
-      setErrorMsg('Please select a valid Sender Identity.');
+      setErrorMsg('Select a sender identity before sending.');
       setSending(false);
       return;
     }
@@ -214,11 +219,11 @@ export default function AdminEmailComposePage() {
                 {identitiesLoading ? (
                   <div className="p-3 bg-[#141414] border border-[#222222] text-[#888888] flex items-center gap-2 text-xs">
                     <Loader2 size={14} className="animate-spin text-emerald-400" />
-                    <span>Loading sender identities...</span>
+                    <span>Loading sender identities…</span>
                   </div>
                 ) : identities.length === 0 ? (
                   <div className="p-3 bg-red-950/20 border border-red-900/50 text-red-400 text-xs">
-                    No active @chenabmedia.in sender identities found.
+                    No verified CHENAB sender identities are configured.
                   </div>
                 ) : (
                   <select
@@ -345,8 +350,30 @@ export default function AdminEmailComposePage() {
             </form>
           </div>
 
-          {/* Right Column: Live Preview */}
+          {/* Right Column: Live Preview & Diagnostics */}
           <div className="lg:col-span-5 space-y-4">
+            {/* Safe Diagnostics Panel */}
+            <div className="bg-[#0D0D0D] border border-[#1C1C1C] p-4 font-mono text-[11px] text-[#888888] space-y-1.5">
+              <div className="text-emerald-400 font-bold uppercase tracking-wider text-[10px] flex items-center justify-between">
+                <span>[SENDER IDENTITY DIAGNOSTICS]</span>
+                <span className="text-[#555555]">PROD VERIFIED</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1 text-[10px]">
+                <div>
+                  <span className="text-[#666666]">Identities Loaded:</span>{' '}
+                  <span className="text-[#F5F5F5] font-bold">{identities.length}</span>
+                </div>
+                <div>
+                  <span className="text-[#666666]">Selected ID:</span>{' '}
+                  <span className="text-emerald-300 font-bold">{selectedIdentityId || 'NONE'}</span>
+                </div>
+              </div>
+              <div className="text-[10px] pt-1 border-t border-[#181818] space-y-1">
+                <p><span className="text-[#666666]">Identity IDs:</span> <span className="text-[#CCCCCC]">{identities.map((i) => i.id).join(', ') || 'None'}</span></p>
+                <p><span className="text-[#666666]">Sender Emails:</span> <span className="text-[#CCCCCC]">{identities.map((i) => i.email).join(', ') || 'None'}</span></p>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2 font-mono text-xs text-[#888888]">
               <Eye size={14} className="text-emerald-400" />
               <span>LIVE HTML EMAIL PREVIEW</span>

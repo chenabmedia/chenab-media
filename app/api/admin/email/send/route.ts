@@ -71,12 +71,25 @@ export async function POST(req: NextRequest) {
     if (adminDb) {
       const docSnap = await adminDb.collection('emailIdentities').doc(senderIdentityId).get();
       if (docSnap.exists) {
-        senderIdentity = { id: docSnap.id, ...(docSnap.data() as Omit<EmailIdentity, 'id'>) };
+        senderIdentity = { ...docSnap.data(), id: docSnap.id } as EmailIdentity;
+      } else {
+        // Fallback: search by email address or suffix
+        const queryByEmail = await adminDb.collection('emailIdentities').where('email', '==', senderIdentityId).get();
+        if (!queryByEmail.empty) {
+          const firstDoc = queryByEmail.docs[0];
+          senderIdentity = { ...firstDoc.data(), id: firstDoc.id } as EmailIdentity;
+        } else {
+          const queryBySuffix = await adminDb.collection('emailIdentities').where('suffix', '==', senderIdentityId).get();
+          if (!queryBySuffix.empty) {
+            const firstDoc = queryBySuffix.docs[0];
+            senderIdentity = { ...firstDoc.data(), id: firstDoc.id } as EmailIdentity;
+          }
+        }
       }
     } else if (db) {
       const docSnap = await getDoc(doc(db, 'emailIdentities', senderIdentityId));
       if (docSnap.exists()) {
-        senderIdentity = { id: docSnap.id, ...(docSnap.data() as Omit<EmailIdentity, 'id'>) };
+        senderIdentity = { ...docSnap.data(), id: docSnap.id } as EmailIdentity;
       }
     }
 

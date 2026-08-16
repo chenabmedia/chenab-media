@@ -5,6 +5,7 @@ import { collection, addDoc } from 'firebase/firestore';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import {
   EMAIL_TEMPLATES,
+  EMAIL_TEMPLATE_CONFIGS,
   DEFAULT_GLOBAL_VARS,
   EmailTemplateKey,
   EmailTemplateConfig,
@@ -48,23 +49,30 @@ function formatSenderAddress(rawFrom?: string): string {
   if (!rawFrom) return DEFAULT_SENDER;
 
   const trimmed = rawFrom.trim();
-  // If already formatted like "Name <email@chenabmedia.in>"
+
+  // Extract email address if enclosed in < >
+  const match = trimmed.match(/<([^>]+)>/);
+  const emailPart = match ? match[1].trim() : (trimmed.includes('@') ? trimmed : `${trimmed}@chenabmedia.in`);
+
+  // Verify domain ends with @chenabmedia.in
+  const lowerEmail = emailPart.toLowerCase();
+  if (!lowerEmail.endsWith('@chenabmedia.in')) {
+    console.warn(`[sendTemplateEmail] Invalid sender domain ${emailPart}. Falling back to admin@chenabmedia.in`);
+    return DEFAULT_SENDER;
+  }
+
+  // If already formatted like "Display Name <email@chenabmedia.in>"
   if (trimmed.includes('<') && trimmed.includes('>')) {
     return trimmed;
   }
 
-  // If plain email like "admin@chenabmedia.in" or local part like "admin"
-  if (trimmed.includes('@')) {
-    return `CHENAB MEDIA <${trimmed}>`;
-  }
-
-  return `CHENAB MEDIA <${trimmed}@chenabmedia.in>`;
+  return `CHENAB MEDIA <${emailPart}>`;
 }
 
 export async function sendTemplateEmail(
   options: SendTemplateEmailOptions
 ): Promise<SendTemplateEmailResult> {
-  // Ensure server-side execution
+  // Enforce server-side execution only
   if (typeof window !== 'undefined') {
     throw new Error('sendTemplateEmail can only be called in a server-side context.');
   }
@@ -97,8 +105,10 @@ export async function sendTemplateEmail(
     }
   }
 
-  const templateConfig: EmailTemplateConfig | undefined = EMAIL_TEMPLATES[templateKey];
-  if (!templateConfig) {
+  const templateId = EMAIL_TEMPLATES[templateKey];
+  const templateConfig: EmailTemplateConfig | undefined = EMAIL_TEMPLATE_CONFIGS[templateKey];
+
+  if (!templateId || !templateConfig) {
     return { success: false, error: `Unknown template key: ${templateKey}` };
   }
 
@@ -107,13 +117,18 @@ export async function sendTemplateEmail(
   const bccList = normalizeEmailList(bcc);
   const replyToList = normalizeEmailList(replyTo);
 
-  // Merge default variables with caller variables
+  // Merge default global variables with caller variables
   const mergedVars: Record<string, any> = {
     ...DEFAULT_GLOBAL_VARS,
+    companyName: 'Chenab Media',
+    labelName: 'CHENAB MEDIA',
+    website: 'https://chenabmedia.in',
+    supportEmail: 'admin@chenabmedia.in',
+    year: new Date().getFullYear().toString(),
     ...variables,
   };
 
-  // Convert nulls/undefineds to clean string representations for template engine
+  // Convert nulls/undefineds to clean string representations for Resend
   Object.keys(mergedVars).forEach((key) => {
     if (mergedVars[key] === undefined || mergedVars[key] === null) {
       mergedVars[key] = '';
@@ -126,7 +141,7 @@ export async function sendTemplateEmail(
   if (!resendApiKey) {
     console.error(`[sendTemplateEmail] RESEND_API_KEY missing while attempting to send ${templateKey}`);
 
-    // Store log for unconfigured service
+    // Create log entry for unconfigured service
     const logEntry = {
       templateKey,
       templateName: templateConfig.name,
@@ -136,7 +151,7 @@ export async function sendTemplateEmail(
       subject: finalSubject,
       status: 'FAILED',
       resendId: null,
-      error: 'RESEND_API_KEY is not configured on server environment',
+      error: 'Email service is not configured (RESEND_API_KEY missing)',
       eventType,
       relatedId: relatedId || null,
       sentBy: actorEmail || 'system',
@@ -153,22 +168,9 @@ export async function sendTemplateEmail(
       console.error('[sendTemplateEmail] Error writing emailLog:', e);
     }
 
-    if (actorEmail || actorUid) {
-      await recordAuditLog({
-        actorUid: actorUid || 'system',
-        actorName: 'System',
-        actorEmail: actorEmail || 'system@chenabmedia.in',
-        action: 'EMAIL_SENT',
-        targetType: 'email_template',
-        targetId: templateConfig.id,
-        description: `Failed to send template "${templateConfig.name}" (RESEND_API_KEY unconfigured)`,
-        metadata: { templateKey, recipients, status: 'FAILED' },
-      });
-    }
-
     return {
       success: false,
-      error: 'Email service is unconfigured (RESEND_API_KEY missing).',
+      error: 'Email service is not configured',
       statusCode: 503,
     };
   }
@@ -180,7 +182,7 @@ export async function sendTemplateEmail(
   try {
     const resend = new Resend(resendApiKey);
 
-    // Call Resend with template configuration
+    // Call Resend API with template ID and variables
     const sendResponse = (await resend.emails.send({
       from: formattedSender,
       to: recipients,
@@ -208,10 +210,14 @@ export async function sendTemplateEmail(
     errorMessage = err.message || 'Resend API dispatch error';
   }
 
-  // Prepare safe metadata for logs (strip passwords if present)
+  // Redact passwords and credentials from logged variables
   const safeVars = { ...mergedVars };
-  if (safeVars.temporaryPassword) safeVars.temporaryPassword = '[REDACTED]';
-  if (safeVars.password) safeVars.password = '[REDACTED]';
+  const sensitiveKeys = ['password', 'temporaryPassword', 'token', 'secret', 'apiKey', 'credential'];
+  Object.keys(safeVars).forEach((key) => {
+    if (sensitiveKeys.some((s) => key.toLowerCase().includes(s))) {
+      safeVars[key] = '[REDACTED]';
+    }
+  });
 
   const logEntry = {
     templateKey,

@@ -1,22 +1,24 @@
-export type EmailTemplateKey =
-  | 'DEMO_SUBMISSION_RECEIVED'
-  | 'CONTACT_CONFIRMATION'
-  | 'CUSTOM_COMMUNICATION'
-  | 'WITHDRAWAL_PAID'
-  | 'WITHDRAWAL_REJECTED'
-  | 'WITHDRAWAL_APPROVED'
-  | 'WITHDRAWAL_RECEIVED'
-  | 'MUSIC_LINK_PUBLISHED'
-  | 'RELEASE_PUBLISHED'
-  | 'EMAIL_VERIFICATION'
-  | 'ADMIN_INVITE'
-  | 'PASSWORD_RESET'
-  | 'ARTIST_INVITATION'
-  | 'ARTIST_WELCOME'
-  | 'AGREEMENT_SIGNED'
-  | 'ARTIST_AGREEMENT'
-  | 'VERIFY_EMAIL'
-  | 'DEMO_ACCEPTED';
+export const EMAIL_TEMPLATES = {
+  DEMO_SUBMISSION_RECEIVED: 'DemoSubmissionReceived',
+  CONTACT_CONFIRMATION: 'ContactConfirmation',
+  CUSTOM_COMMUNICATION: 'CustomCommunication',
+  WITHDRAWAL_PAID: 'WithdrawalPaid',
+  WITHDRAWAL_REJECTED: 'WithdrawalRejected',
+  WITHDRAWAL_APPROVED: 'WithdrawalApproved',
+  WITHDRAWAL_RECEIVED: 'WithdrawalReceived',
+  MUSIC_LINK_PUBLISHED: 'MusicLinkPublished',
+  RELEASE_PUBLISHED: 'ReleasePublished',
+  EMAIL_VERIFICATION: 'EmailVerification',
+  ADMIN_INVITE: 'AdminInvite',
+  PASSWORD_RESET: 'PasswordReset',
+  ARTIST_INVITATION: 'ArtistInvitation',
+  ARTIST_WELCOME: 'ArtistWelcome',
+  AGREEMENT_SIGNED: 'AgreementSigned',
+  ARTIST_AGREEMENT: 'ArtistAgreement',
+  VERIFY_EMAIL: 'VerifyEmail',
+} as const;
+
+export type EmailTemplateKey = keyof typeof EMAIL_TEMPLATES;
 
 export interface EmailTemplateConfig {
   id: string;
@@ -26,11 +28,11 @@ export interface EmailTemplateConfig {
   vars: string[];
 }
 
-export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
+export const EMAIL_TEMPLATE_CONFIGS: Record<EmailTemplateKey, EmailTemplateConfig> = {
   DEMO_SUBMISSION_RECEIVED: {
-    id: '17bc854f-b0ed-475e-9c6c-bc8ec1fbee14',
+    id: EMAIL_TEMPLATES.DEMO_SUBMISSION_RECEIVED,
     alias: 'demosubmissionreceived',
-    name: 'DemoSubmissionReceived',
+    name: EMAIL_TEMPLATES.DEMO_SUBMISSION_RECEIVED,
     defaultSubject: 'Demo Submission Received - CHENAB MEDIA A&R',
     vars: [
       'logoUrl',
@@ -48,9 +50,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   CONTACT_CONFIRMATION: {
-    id: 'cd53fea0-68bb-4019-9d24-804fad6407a0',
+    id: EMAIL_TEMPLATES.CONTACT_CONFIRMATION,
     alias: 'contactconfirmation',
-    name: 'ContactConfirmation',
+    name: EMAIL_TEMPLATES.CONTACT_CONFIRMATION,
     defaultSubject: 'Message Received - CHENAB MEDIA Correspondence',
     vars: [
       'logoUrl',
@@ -67,9 +69,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   CUSTOM_COMMUNICATION: {
-    id: '9078d2b7-9f86-4105-8c6c-6180e260a322',
+    id: EMAIL_TEMPLATES.CUSTOM_COMMUNICATION,
     alias: 'customcommunication',
-    name: 'CustomCommunication',
+    name: EMAIL_TEMPLATES.CUSTOM_COMMUNICATION,
     defaultSubject: 'Official Notice - CHENAB MEDIA',
     vars: [
       'emailSubject',
@@ -103,9 +105,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   WITHDRAWAL_PAID: {
-    id: '07f8a34b-4438-4777-ad46-5d85ee59a9f1',
+    id: EMAIL_TEMPLATES.WITHDRAWAL_PAID,
     alias: 'withdrawalpaid',
-    name: 'WithdrawalPaid',
+    name: EMAIL_TEMPLATES.WITHDRAWAL_PAID,
     defaultSubject: 'Withdrawal Processed & Paid - CHENAB MEDIA Finance',
     vars: [
       'logoUrl',
@@ -128,9 +130,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   WITHDRAWAL_REJECTED: {
-    id: '180e3f12-5560-4d8d-a6b6-ef3ced5c57f7',
+    id: EMAIL_TEMPLATES.WITHDRAWAL_REJECTED,
     alias: 'withdrawalrejected',
-    name: 'WithdrawalRejected',
+    name: EMAIL_TEMPLATES.WITHDRAWAL_REJECTED,
     defaultSubject: 'Withdrawal Request Update - CHENAB MEDIA Finance',
     vars: [
       'logoUrl',
@@ -152,9 +154,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   WITHDRAWAL_APPROVED: {
-    id: 'd99e2043-518b-4b92-9d4b-1b1b35dbf7b1',
+    id: EMAIL_TEMPLATES.WITHDRAWAL_APPROVED,
     alias: 'withdrawalapproved',
-    name: 'WithdrawalApproved',
+    name: EMAIL_TEMPLATES.WITHDRAWAL_APPROVED,
     defaultSubject: 'Withdrawal Request Approved - CHENAB MEDIA Finance',
     vars: [
       'logoUrl',
@@ -176,9 +178,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   WITHDRAWAL_RECEIVED: {
-    id: '95f493cb-44bf-48a2-9fd3-d1055d095749',
+    id: EMAIL_TEMPLATES.WITHDRAWAL_RECEIVED,
     alias: 'withdrawalreceived',
-    name: 'WithdrawalReceived',
+    name: EMAIL_TEMPLATES.WITHDRAWAL_RECEIVED,
     defaultSubject: 'Withdrawal Request Logged - CHENAB MEDIA Finance',
     vars: [
       'logoUrl',
@@ -199,9 +201,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   MUSIC_LINK_PUBLISHED: {
-    id: 'a6f0022e-6e3f-4463-ae78-d7a5714e339e',
+    id: EMAIL_TEMPLATES.MUSIC_LINK_PUBLISHED,
     alias: 'musiclinkpublished',
-    name: 'MusicLinkPublished',
+    name: EMAIL_TEMPLATES.MUSIC_LINK_PUBLISHED,
     defaultSubject: 'SmartLink Live & Ready - CHENAB MEDIA Catalogue',
     vars: [
       'logoUrl',
@@ -217,9 +219,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   RELEASE_PUBLISHED: {
-    id: '79398eb7-a389-4d7e-bc4a-4d1a71dd72e1',
+    id: EMAIL_TEMPLATES.RELEASE_PUBLISHED,
     alias: 'releasepublished',
-    name: 'ReleasePublished',
+    name: EMAIL_TEMPLATES.RELEASE_PUBLISHED,
     defaultSubject: 'Catalogue Release Published - CHENAB MEDIA Distribution',
     vars: [
       'logoUrl',
@@ -242,9 +244,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   EMAIL_VERIFICATION: {
-    id: '9379c2da-0c0b-4fe0-90f7-277d01a24b7b',
+    id: EMAIL_TEMPLATES.EMAIL_VERIFICATION,
     alias: 'emailverification',
-    name: 'EmailVerification',
+    name: EMAIL_TEMPLATES.EMAIL_VERIFICATION,
     defaultSubject: 'Verify Your Email Address - CHENAB MEDIA Portal',
     vars: [
       'logoUrl',
@@ -262,9 +264,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   ADMIN_INVITE: {
-    id: 'f4ea7f2a-84bd-4f80-af46-4bedce6b98b8',
+    id: EMAIL_TEMPLATES.ADMIN_INVITE,
     alias: 'admininvite',
-    name: 'AdminInvite',
+    name: EMAIL_TEMPLATES.ADMIN_INVITE,
     defaultSubject: 'Administrative Access Provisioned - CHENAB MEDIA Portal',
     vars: [
       'logoUrl',
@@ -283,9 +285,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   PASSWORD_RESET: {
-    id: '12fe0f11-296c-4173-aa1f-9d3e4e82dd55',
+    id: EMAIL_TEMPLATES.PASSWORD_RESET,
     alias: 'passwordreset',
-    name: 'PasswordReset',
+    name: EMAIL_TEMPLATES.PASSWORD_RESET,
     defaultSubject: 'Password Reset Request - CHENAB MEDIA Account',
     vars: [
       'logoUrl',
@@ -305,9 +307,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   ARTIST_INVITATION: {
-    id: '872278df-8528-45f5-be02-afbe4fd9800a',
+    id: EMAIL_TEMPLATES.ARTIST_INVITATION,
     alias: 'artistinvitation',
-    name: 'ArtistInvitation',
+    name: EMAIL_TEMPLATES.ARTIST_INVITATION,
     defaultSubject: 'Invitation to Join CHENAB MEDIA Roster',
     vars: [
       'logoUrl',
@@ -326,9 +328,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   ARTIST_WELCOME: {
-    id: 'ad41837f-5bb2-40ec-9b7f-571ec2cae494',
+    id: EMAIL_TEMPLATES.ARTIST_WELCOME,
     alias: 'artistwelcome',
-    name: 'ArtistWelcome',
+    name: EMAIL_TEMPLATES.ARTIST_WELCOME,
     defaultSubject: 'Welcome to CHENAB MEDIA Roster',
     vars: [
       'logoUrl',
@@ -345,9 +347,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   AGREEMENT_SIGNED: {
-    id: '970b10b1-126f-4470-ac03-f583d8824711',
+    id: EMAIL_TEMPLATES.AGREEMENT_SIGNED,
     alias: 'agreementsigned',
-    name: 'AgreementSigned',
+    name: EMAIL_TEMPLATES.AGREEMENT_SIGNED,
     defaultSubject: 'Agreement Signed & Executed - CHENAB MEDIA Legal',
     vars: [
       'logoUrl',
@@ -368,9 +370,9 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   ARTIST_AGREEMENT: {
-    id: '71cf2279-5742-4914-95e0-3ab2d5b87b3c',
+    id: EMAIL_TEMPLATES.ARTIST_AGREEMENT,
     alias: 'artistagreement',
-    name: 'ArtistAgreement',
+    name: EMAIL_TEMPLATES.ARTIST_AGREEMENT,
     defaultSubject: 'New Agreement Issued - CHENAB MEDIA Legal',
     vars: [
       'artistName',
@@ -384,33 +386,11 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateConfig> = {
     ],
   },
   VERIFY_EMAIL: {
-    id: 'd277e5db-37b0-4eb6-9eb2-c5e9434264f0',
+    id: EMAIL_TEMPLATES.VERIFY_EMAIL,
     alias: 'verifyemail',
-    name: 'VerifyEmail',
+    name: EMAIL_TEMPLATES.VERIFY_EMAIL,
     defaultSubject: 'Please Verify Your Email Address',
     vars: ['name', 'verificationUrl'],
-  },
-  DEMO_ACCEPTED: {
-    id: '21284f72-6e99-440b-a10e-2b2dd7caeba0',
-    alias: 'resend_template_demo_accepted',
-    name: 'DemoAccepted',
-    defaultSubject: 'Demo Accepted - CHENAB MEDIA A&R',
-    vars: [
-      'logoUrl',
-      'artistName',
-      'demoId',
-      'trackTitle',
-      'genre',
-      'reviewDate',
-      'reviewerName',
-      'nextSteps',
-      'meetingLink',
-      'supportEmail',
-      'supportPhone',
-      'website',
-      'year',
-      'companyName',
-    ],
   },
 };
 
@@ -420,5 +400,6 @@ export const DEFAULT_GLOBAL_VARS = {
   supportEmail: 'admin@chenabmedia.in',
   supportPhone: '+1 (800) 555-CHENAB',
   companyName: 'Chenab Media',
+  labelName: 'CHENAB MEDIA',
   year: new Date().getFullYear().toString(),
 };

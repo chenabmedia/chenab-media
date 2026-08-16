@@ -1,11 +1,12 @@
 import { SiteConfig, DEFAULT_SITE_CONFIG } from '@/types/site';
-import { adminDb } from './firebase/admin';
+import { adminDb, getAdminDb } from './firebase/admin';
 import appletConfig from '@/firebase-applet-config.json';
 
 export async function getSiteConfig(): Promise<SiteConfig> {
-  if (adminDb) {
+  const db = adminDb || getAdminDb();
+  if (db) {
     try {
-      const docRef = adminDb.collection('siteConfig').doc('global');
+      const docRef = db.collection('siteConfig').doc('global');
       const docSnap = await docRef.get();
       if (docSnap.exists) {
         return { ...DEFAULT_SITE_CONFIG, ...(docSnap.data() as SiteConfig) };
@@ -51,12 +52,13 @@ export async function getSiteConfig(): Promise<SiteConfig> {
 }
 
 export async function saveSiteConfig(config: SiteConfig): Promise<void> {
-  if (!adminDb) {
+  const db = adminDb || getAdminDb();
+  if (!db) {
     throw new Error('Firebase Admin SDK is not initialized.');
   }
 
   try {
-    await adminDb.collection('siteConfig').doc('global').set({
+    await db.collection('siteConfig').doc('global').set({
       ...config,
       updatedAt: new Date().toISOString(),
     }, { merge: true });

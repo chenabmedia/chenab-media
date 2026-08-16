@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase/admin';
+import { adminDb, getAdminDb } from '@/lib/firebase/admin';
 import { getSiteConfig, saveSiteConfig } from '@/lib/siteConfig';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
 import { recordAuditLog } from '@/lib/firebase/audit';
@@ -11,7 +11,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: authRes.error || 'Unauthorized: site.manage permission required' }, { status: 403 });
     }
 
-    if (!adminDb) {
+    const db = adminDb || getAdminDb();
+    if (!db) {
+      console.warn('[GET /api/admin/site Diagnostics]', {
+        route: '/api/admin/site',
+        method: 'GET',
+        projectId: 'chenabmedia-in',
+        databaseId: '(default)',
+        adminInitialized: false,
+        authVerified: true,
+      });
       return NextResponse.json({ error: 'Firebase Admin SDK is not initialized.' }, { status: 500 });
     }
 
@@ -27,6 +36,21 @@ export async function POST(req: NextRequest) {
     const authRes = await verifyServerAuth(req, 'site.manage');
     if (!authRes.authenticated || !authRes.profile) {
       return NextResponse.json({ error: authRes.error || 'Unauthorized: site.manage permission required' }, { status: 403 });
+    }
+
+    const db = adminDb || getAdminDb();
+    console.log('[POST /api/admin/site Diagnostics]', {
+      route: '/api/admin/site',
+      method: 'POST',
+      projectId: 'chenabmedia-in',
+      databaseId: '(default)',
+      adminInitialized: Boolean(db),
+      authVerified: true,
+      adminDbExists: Boolean(db),
+    });
+
+    if (!db) {
+      return NextResponse.json({ error: 'Firebase Admin SDK is not initialized.' }, { status: 500 });
     }
 
     const body = await req.json();

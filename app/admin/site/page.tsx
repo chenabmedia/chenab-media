@@ -30,8 +30,10 @@ export default function AdminSiteCmsPage() {
         }
         const res = await fetch('/api/admin/site', { headers });
         const data = await res.json();
-        if (data && !data.error) {
+        if (res.ok && data && !data.error) {
           setConfig({ ...DEFAULT_SITE_CONFIG, ...data });
+        } else if (data && data.error) {
+          setErrorMsg(data.error);
         }
       } catch (err) {
         setErrorMsg('Failed to load site configuration');

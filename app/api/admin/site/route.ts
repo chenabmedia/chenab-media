@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { adminDb } from '@/lib/firebase/admin';
 import { getSiteConfig, saveSiteConfig } from '@/lib/siteConfig';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
 import { recordAuditLog } from '@/lib/firebase/audit';
 
 export async function GET(req: NextRequest) {
   try {
+    const authRes = await verifyServerAuth(req, 'site.manage');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized: site.manage permission required' }, { status: 403 });
+    }
+
+    if (!adminDb) {
+      return NextResponse.json({ error: 'Firebase Admin SDK is not initialized.' }, { status: 500 });
+    }
+
     const config = await getSiteConfig();
     return NextResponse.json(config);
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch site config' }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || 'Failed to fetch site config' }, { status: 500 });
   }
 }
 

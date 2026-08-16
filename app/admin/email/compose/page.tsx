@@ -4,12 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { EmailIdentity } from '@/types/site';
-import { Send, CheckCircle, AlertCircle, Menu, Eye, Mail, Link as LinkIcon } from 'lucide-react';
+import { Send, CheckCircle, AlertCircle, Menu, Eye, Mail, Link as LinkIcon, Loader2 } from 'lucide-react';
 
 export default function AdminEmailComposePage() {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [identities, setIdentities] = useState<EmailIdentity[]>([]);
+  const [identitiesLoading, setIdentitiesLoading] = useState(true);
   const [selectedIdentityId, setSelectedIdentityId] = useState('');
   const [to, setTo] = useState('');
   const [cc, setCc] = useState('');
@@ -26,21 +27,23 @@ export default function AdminEmailComposePage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
     async function loadIdentities() {
+      setIdentitiesLoading(true);
+      setErrorMsg(null);
+
       try {
-        let token = '';
-        if (user) {
-          try {
-            token = await user.getIdToken();
-          } catch (e) {
-            console.warn('Could not retrieve auth token:', e);
-          }
+        if (!user) {
+          throw new Error('Authentication required. Please sign in as admin.');
         }
+
+        const token = await user.getIdToken();
 
         const res = await fetch('/api/admin/email-identities', {
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            Authorization: `Bearer ${token}`,
           },
         });
 
@@ -56,20 +59,32 @@ export default function AdminEmailComposePage() {
           throw new Error(data.error || 'Failed to load email identities');
         }
 
-        if (data && data.identities && data.identities.length > 0) {
-          const enabledIds = data.identities.filter((i: EmailIdentity) => i.enabled);
+        if (data && data.identities && Array.isArray(data.identities)) {
+          const enabledIds = data.identities.filter((i: EmailIdentity) => i.enabled !== false);
           setIdentities(enabledIds);
           if (enabledIds.length > 0) {
-            setSelectedIdentityId(enabledIds[0].id);
+            setSelectedIdentityId((prev) => {
+              if (prev && enabledIds.some((i: EmailIdentity) => i.id === prev)) {
+                return prev;
+              }
+              return enabledIds[0].id;
+            });
+          } else {
+            setSelectedIdentityId('');
           }
+        } else {
+          setIdentities([]);
+          setSelectedIdentityId('');
         }
       } catch (err: any) {
         setErrorMsg(err.message || 'Failed to load sender identities');
+      } finally {
+        setIdentitiesLoading(false);
       }
     }
 
     loadIdentities();
-  }, [user]);
+  }, [user, authLoading]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,32 +92,51 @@ export default function AdminEmailComposePage() {
     setSuccessMsg(null);
     setErrorMsg(null);
 
+    // Client-side validation check
+    if (!selectedIdentityId) {
+      setErrorMsg('Please select a valid Sender Identity.');
+      setSending(false);
+      return;
+    }
+    if (!to.trim()) {
+      setErrorMsg('Recipient email is required.');
+      setSending(false);
+      return;
+    }
+    if (!subject.trim()) {
+      setErrorMsg('Subject line is required.');
+      setSending(false);
+      return;
+    }
+    if (!message.trim()) {
+      setErrorMsg('Message body is required.');
+      setSending(false);
+      return;
+    }
+
     try {
-      let token = '';
-      if (user) {
-        try {
-          token = await user.getIdToken();
-        } catch (e) {
-          console.warn('Could not retrieve auth token:', e);
-        }
+      if (!user) {
+        throw new Error('Authentication required. Please sign in.');
       }
+
+      const token = await user.getIdToken();
 
       const res = await fetch('/api/admin/email/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           senderIdentityId: selectedIdentityId,
-          to,
-          cc,
-          bcc,
-          subject,
-          message,
+          to: to.trim(),
+          cc: cc.trim(),
+          bcc: bcc.trim(),
+          subject: subject.trim(),
+          message: message.trim(),
           buttonEnabled,
-          buttonLabel,
-          buttonUrl,
+          buttonLabel: buttonLabel.trim(),
+          buttonUrl: buttonUrl.trim(),
         }),
       });
 
@@ -130,6 +164,7 @@ export default function AdminEmailComposePage() {
   };
 
   const selectedIdentity = identities.find((i) => i.id === selectedIdentityId);
+  const isFormValid = !!selectedIdentityId && !!to.trim() && !!subject.trim() && !!message.trim();
 
   return (
     <div className="min-h-screen bg-[#080808] text-[#F5F5F5] flex font-sans">
@@ -175,29 +210,40 @@ export default function AdminEmailComposePage() {
 
             <form onSubmit={handleSend} className="bg-[#0D0D0D] border border-[#1C1C1C] p-6 sm:p-8 space-y-6 font-mono text-xs">
               <div className="space-y-2">
-                <label className="block text-[#CCCCCC] uppercase">Sender Identity (Domain: @chenabmedia.in)</label>
-                <select
-                  value={selectedIdentityId}
-                  onChange={(e) => setSelectedIdentityId(e.target.value)}
-                  className="w-full bg-[#141414] border border-[#222222] p-3 text-[#F5F5F5] focus:outline-none"
-                >
-                  {identities.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.displayName} &lt;{item.email}&gt;
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-[#CCCCCC] uppercase">Sender Identity (Domain: @chenabmedia.in) *</label>
+                {identitiesLoading ? (
+                  <div className="p-3 bg-[#141414] border border-[#222222] text-[#888888] flex items-center gap-2 text-xs">
+                    <Loader2 size={14} className="animate-spin text-emerald-400" />
+                    <span>Loading sender identities...</span>
+                  </div>
+                ) : identities.length === 0 ? (
+                  <div className="p-3 bg-red-950/20 border border-red-900/50 text-red-400 text-xs">
+                    No active @chenabmedia.in sender identities found.
+                  </div>
+                ) : (
+                  <select
+                    value={selectedIdentityId}
+                    onChange={(e) => setSelectedIdentityId(e.target.value)}
+                    className="w-full bg-[#141414] border border-[#222222] p-3 text-[#F5F5F5] focus:outline-none text-base sm:text-xs"
+                  >
+                    {identities.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.displayName} &lt;{item.email}&gt;
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[#CCCCCC] uppercase">Recipient(s) (Comma separated)</label>
+                <label className="block text-[#CCCCCC] uppercase">Recipient(s) (Comma separated) *</label>
                 <input
                   type="text"
                   required
                   placeholder="artist@example.com, manager@example.com"
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
-                  className="w-full bg-[#141414] border border-[#222222] p-3 text-[#F5F5F5] focus:outline-none"
+                  className="w-full bg-[#141414] border border-[#222222] p-3 text-[#F5F5F5] focus:outline-none text-base sm:text-xs"
                 />
               </div>
 
@@ -209,7 +255,7 @@ export default function AdminEmailComposePage() {
                     placeholder="cc@example.com"
                     value={cc}
                     onChange={(e) => setCc(e.target.value)}
-                    className="w-full bg-[#141414] border border-[#222222] p-2.5 text-[#F5F5F5] focus:outline-none"
+                    className="w-full bg-[#141414] border border-[#222222] p-2.5 text-[#F5F5F5] focus:outline-none text-base sm:text-xs"
                   />
                 </div>
                 <div className="space-y-2">
@@ -219,25 +265,25 @@ export default function AdminEmailComposePage() {
                     placeholder="bcc@example.com"
                     value={bcc}
                     onChange={(e) => setBcc(e.target.value)}
-                    className="w-full bg-[#141414] border border-[#222222] p-2.5 text-[#F5F5F5] focus:outline-none"
+                    className="w-full bg-[#141414] border border-[#222222] p-2.5 text-[#F5F5F5] focus:outline-none text-base sm:text-xs"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[#CCCCCC] uppercase">Subject Line</label>
+                <label className="block text-[#CCCCCC] uppercase">Subject Line *</label>
                 <input
                   type="text"
                   required
                   placeholder="Important updates regarding your catalogue release..."
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full bg-[#141414] border border-[#222222] p-3 text-[#F5F5F5] focus:outline-none"
+                  className="w-full bg-[#141414] border border-[#222222] p-3 text-[#F5F5F5] focus:outline-none text-base sm:text-xs"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[#CCCCCC] uppercase">Message Body</label>
+                <label className="block text-[#CCCCCC] uppercase">Message Body *</label>
                 <textarea
                   rows={8}
                   required
@@ -270,7 +316,7 @@ export default function AdminEmailComposePage() {
                         type="text"
                         value={buttonLabel}
                         onChange={(e) => setButtonLabel(e.target.value)}
-                        className="w-full bg-[#0A0A0A] border border-[#333333] p-2 text-[#F5F5F5]"
+                        className="w-full bg-[#0A0A0A] border border-[#333333] p-2 text-[#F5F5F5] text-base sm:text-xs"
                       />
                     </div>
                     <div className="space-y-1">
@@ -279,7 +325,7 @@ export default function AdminEmailComposePage() {
                         type="url"
                         value={buttonUrl}
                         onChange={(e) => setButtonUrl(e.target.value)}
-                        className="w-full bg-[#0A0A0A] border border-[#333333] p-2 text-[#F5F5F5]"
+                        className="w-full bg-[#0A0A0A] border border-[#333333] p-2 text-[#F5F5F5] text-base sm:text-xs"
                       />
                     </div>
                   </div>
@@ -289,10 +335,10 @@ export default function AdminEmailComposePage() {
               <div className="pt-4">
                 <button
                   type="submit"
-                  disabled={sending}
-                  className="w-full py-3.5 bg-[#F5F5F5] hover:bg-white text-[#080808] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  disabled={sending || !isFormValid}
+                  className="w-full py-3.5 bg-[#F5F5F5] hover:bg-white text-[#080808] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <Send size={15} />
+                  {sending ? <Loader2 size={15} className="animate-spin text-emerald-600" /> : <Send size={15} />}
                   <span>{sending ? 'Dispatched via Resend...' : 'Dispatch Secure Email'}</span>
                 </button>
               </div>

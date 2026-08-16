@@ -20,8 +20,10 @@ import {
 } from 'lucide-react';
 import { Artist } from '@/types';
 import { ARTISTS } from '@/data/artists';
+import { useAuth } from '@/context/AuthContext';
 
 export default function AdminArtistsPage() {
+  const { user, loading: authLoading } = useAuth();
   const [artists, setArtists] = useState<Artist[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -33,12 +35,20 @@ export default function AdminArtistsPage() {
     setLoading(true);
     setActionError(null);
     try {
-      const res = await fetch('/api/admin/artists');
+      if (!user) {
+        setArtists(ARTISTS);
+        return;
+      }
+      const token = await user.getIdToken();
+      const res = await fetch('/api/admin/artists', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         const firestoreList: Artist[] = data.artists || [];
 
-        // Merge or fallback to static ARTISTS if Firestore list is sparse
         if (firestoreList.length > 0) {
           setArtists(firestoreList);
         } else {
@@ -56,8 +66,10 @@ export default function AdminArtistsPage() {
   };
 
   useEffect(() => {
-    fetchArtists();
-  }, []);
+    if (!authLoading) {
+      fetchArtists();
+    }
+  }, [user, authLoading]);
 
   const handleToggleStatus = async (artistId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
@@ -65,9 +77,15 @@ export default function AdminArtistsPage() {
     setActionError(null);
 
     try {
+      if (!user) throw new Error('Authentication required');
+      const token = await user.getIdToken();
+
       const res = await fetch(`/api/admin/artists/${artistId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ status: newStatus }),
       });
 
@@ -77,7 +95,7 @@ export default function AdminArtistsPage() {
         );
         setActionSuccess(`ARTIST STATUS UPDATED TO ${newStatus}.`);
       } else {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Failed to update status');
       }
     } catch (err: any) {

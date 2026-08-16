@@ -11,17 +11,26 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Notification } from '@/types';
+import { useAuth } from '@/context/AuthContext';
 
 export default function ArtistNotificationsPage() {
+  const { user, loading: authLoading } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'ALL' | 'UNREAD' | 'READ'>('ALL');
 
   useEffect(() => {
+    if (authLoading) return;
+
     async function fetchNotifs() {
       try {
         setLoading(true);
-        const res = await fetch('/api/artist/notifications');
+        let headers: Record<string, string> = {};
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch('/api/artist/notifications', { headers });
         if (res.ok) {
           const data = await res.json();
           setNotifications(data.notifications || []);
@@ -34,12 +43,18 @@ export default function ArtistNotificationsPage() {
     }
 
     fetchNotifs();
-  }, []);
+  }, [user, authLoading]);
 
   const handleMarkAsRead = async (id: string) => {
     try {
+      let headers: Record<string, string> = {};
+      if (user) {
+        const token = await user.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const res = await fetch(`/api/artist/notifications/${id}`, {
         method: 'PATCH',
+        headers,
       });
       if (res.ok) {
         setNotifications((prev) =>

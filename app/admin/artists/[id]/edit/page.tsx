@@ -3,6 +3,7 @@
 import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import {
   ArrowLeft,
   Users,
@@ -26,6 +27,7 @@ export default function AdminArtistEditPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const artistId = resolvedParams.id;
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -55,17 +57,33 @@ export default function AdminArtistEditPage({ params }: PageProps) {
   const [socialSoundcloud, setSocialSoundcloud] = useState('');
 
   useEffect(() => {
+    if (authLoading) return;
+
     async function fetchArtist() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/admin/artists/${artistId}`);
+        setErrorNotice(null);
+
+        if (!user) {
+          setErrorNotice('Authentication required. Please sign in as administrator.');
+          setLoading(false);
+          return;
+        }
+
+        const token = await user.getIdToken();
+        const res = await fetch(`/api/admin/artists/${artistId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
         let art: Artist | null = null;
 
         if (res.ok) {
           const data = await res.json();
           art = data.artist;
         } else {
-          art = ARTISTS.find((a) => a.id === artistId || a.slug === artistId) || null;
+          const errData = await res.json().catch(() => ({}));
+          setErrorNotice(errData.error || 'Failed to load artist details from server.');
         }
 
         if (art) {
@@ -94,13 +112,13 @@ export default function AdminArtistEditPage({ params }: PageProps) {
       } catch (err) {
         console.error('Error fetching artist for edit:', err);
         setErrorNotice('Failed to load artist details.');
-      } fontFinally: {
+      } finally {
         setLoading(false);
       }
     }
 
     fetchArtist();
-  }, [artistId]);
+  }, [artistId, user, authLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,6 +130,12 @@ export default function AdminArtistEditPage({ params }: PageProps) {
       if (!stageName) {
         throw new Error('Stage Name is required.');
       }
+
+      if (!user) {
+        throw new Error('Authentication required. Please sign in as administrator.');
+      }
+
+      const token = await user.getIdToken();
 
       const parsedGenres = genres
         .split(',')
@@ -149,12 +173,15 @@ export default function AdminArtistEditPage({ params }: PageProps) {
 
       const res = await fetch(`/api/admin/artists/${artistId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Failed to update artist profile');
       }
 
@@ -170,7 +197,7 @@ export default function AdminArtistEditPage({ params }: PageProps) {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="py-20 flex flex-col items-center justify-center space-y-4 font-mono text-xs">
         <Loader2 size={28} className="animate-spin text-emerald-400" />

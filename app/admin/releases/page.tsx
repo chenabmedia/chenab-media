@@ -22,10 +22,12 @@ import {
 import { useToast } from '@/context/ToastContext';
 import { Release, ReleaseStatus, ReleaseType } from '@/types';
 import { RELEASES } from '@/data/releases';
+import { useAuth } from '@/context/AuthContext';
 
 export default function AdminReleasesCMSDirectory() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { user, loading: authLoading } = useAuth();
 
   const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -40,7 +42,12 @@ export default function AdminReleasesCMSDirectory() {
   const fetchReleases = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/releases');
+      let headers: Record<string, string> = {};
+      if (user) {
+        const token = await user.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch('/api/admin/releases', { headers });
       if (res.ok) {
         const json = await res.json();
         let fetched: Release[] = json.releases || [];
@@ -63,15 +70,22 @@ export default function AdminReleasesCMSDirectory() {
   };
 
   useEffect(() => {
-    fetchReleases();
-  }, []);
+    if (!authLoading) {
+      fetchReleases();
+    }
+  }, [user, authLoading]);
 
   const handleArchive = async (id: string, title: string) => {
     if (!confirm(`Are you sure you want to archive "${title}"?`)) return;
 
     setArchivingId(id);
     try {
-      const res = await fetch(`/api/admin/releases/${id}`, { method: 'DELETE' });
+      let headers: Record<string, string> = {};
+      if (user) {
+        const token = await user.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(`/api/admin/releases/${id}`, { method: 'DELETE', headers });
       if (res.ok) {
         showToast(`Release "${title}" archived.`, 'info');
         setActionSuccess(`Release "${title}" archived.`);

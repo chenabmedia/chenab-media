@@ -22,7 +22,7 @@ import {
 import { Artist } from '@/types';
 
 export default function ArtistProfilePage() {
-  const { userProfile } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const [artist, setArtist] = useState<Artist | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,10 +47,17 @@ export default function ArtistProfilePage() {
   const [socialWebsite, setSocialWebsite] = useState('');
 
   useEffect(() => {
+    if (authLoading) return;
+
     async function fetchProfile() {
       try {
         setLoading(true);
-        const res = await fetch('/api/artist/profile');
+        let headers: Record<string, string> = {};
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch('/api/artist/profile', { headers });
         if (res.ok) {
           const data = await res.json();
           const art: Artist = data.artist;
@@ -82,7 +89,7 @@ export default function ArtistProfilePage() {
     }
 
     fetchProfile();
-  }, []);
+  }, [user, authLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +98,9 @@ export default function ArtistProfilePage() {
     setErrorNotice(null);
 
     try {
+      if (!user) throw new Error('Authentication required');
+      const token = await user.getIdToken();
+
       const parsedGenres = genres
         .split(',')
         .map((g) => g.trim())
@@ -122,12 +132,15 @@ export default function ArtistProfilePage() {
 
       const res = await fetch('/api/artist/profile', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Failed to update profile');
       }
 

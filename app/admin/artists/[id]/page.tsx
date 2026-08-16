@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Artist, Release } from '@/types';
 import { ARTISTS } from '@/data/artists';
+import { useAuth } from '@/context/AuthContext';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -28,6 +29,7 @@ interface PageProps {
 export default function AdminArtistDetailPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const artistId = resolvedParams.id;
+  const { user, loading: authLoading } = useAuth();
 
   const [artist, setArtist] = useState<Artist | null>(null);
   const [userAccount, setUserAccount] = useState<any | null>(null);
@@ -37,24 +39,32 @@ export default function AdminArtistDetailPage({ params }: PageProps) {
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
     async function loadArtist() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/admin/artists/${artistId}`);
+        if (!user) {
+          const staticArtist = ARTISTS.find((a) => a.id === artistId || a.slug === artistId);
+          if (staticArtist) setArtist(staticArtist);
+          setLoading(false);
+          return;
+        }
+
+        const token = await user.getIdToken();
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const res = await fetch(`/api/admin/artists/${artistId}`, { headers });
         if (res.ok) {
           const data = await res.json();
           setArtist(data.artist);
           setUserAccount(data.userAccount);
         } else {
-          // Static fallback
           const staticArtist = ARTISTS.find((a) => a.id === artistId || a.slug === artistId);
-          if (staticArtist) {
-            setArtist(staticArtist);
-          }
+          if (staticArtist) setArtist(staticArtist);
         }
 
-        // Also fetch catalog releases
-        const relRes = await fetch('/api/artist/releases');
+        const relRes = await fetch('/api/artist/releases', { headers });
         if (relRes.ok) {
           const relData = await relRes.json();
           setReleases(relData.releases || []);
@@ -67,7 +77,7 @@ export default function AdminArtistDetailPage({ params }: PageProps) {
     }
 
     loadArtist();
-  }, [artistId]);
+  }, [artistId, user, authLoading]);
 
   const handleToggleStatus = async () => {
     if (!artist) return;
@@ -76,9 +86,15 @@ export default function AdminArtistDetailPage({ params }: PageProps) {
     setActionError(null);
 
     try {
+      if (!user) throw new Error('Authentication required');
+      const token = await user.getIdToken();
+
       const res = await fetch(`/api/admin/artists/${artist.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ status: newStatus }),
       });
 
@@ -86,7 +102,7 @@ export default function AdminArtistDetailPage({ params }: PageProps) {
         setArtist((prev) => (prev ? { ...prev, status: newStatus as any } : null));
         setActionSuccess(`ARTIST STATUS SET TO ${newStatus}.`);
       } else {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Status update failed');
       }
     } catch (err: any) {

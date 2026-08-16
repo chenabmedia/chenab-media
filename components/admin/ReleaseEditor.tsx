@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/context/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { Release, ReleaseStatus, ReleaseType, Track, Credit, DSPLinks, Artist } from '@/types';
 import { dspDiscoveryService } from '@/lib/dsp';
@@ -37,6 +38,7 @@ interface ReleaseEditorProps {
 export function ReleaseEditor({ initialRelease, isEditMode = false }: ReleaseEditorProps) {
   const router = useRouter();
   const { showToast } = useToast();
+  const { user, loading: authLoading } = useAuth();
 
   // Form State
   const [id, setId] = useState<string>(initialRelease?.id || '');
@@ -143,9 +145,15 @@ export function ReleaseEditor({ initialRelease, isEditMode = false }: ReleaseEdi
 
   // Fetch roster artists for selector
   useEffect(() => {
+    if (authLoading) return;
     async function loadArtists() {
       try {
-        const res = await fetch('/api/admin/artists');
+        let headers: Record<string, string> = {};
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch('/api/admin/artists', { headers });
         if (res.ok) {
           const data = await res.json();
           setArtists(data.artists || []);
@@ -155,7 +163,7 @@ export function ReleaseEditor({ initialRelease, isEditMode = false }: ReleaseEdi
       }
     }
     loadArtists();
-  }, []);
+  }, [user, authLoading]);
 
   // Update artist display name when primaryArtistIds change
   useEffect(() => {
@@ -186,7 +194,12 @@ export function ReleaseEditor({ initialRelease, isEditMode = false }: ReleaseEdi
             smartLinkSlug,
             ...(id ? { excludeId: id } : {}),
           });
-          const res = await fetch(`/api/admin/releases/check-unique?${query.toString()}`);
+          let headers: Record<string, string> = {};
+          if (user) {
+            const token = await user.getIdToken();
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+          const res = await fetch(`/api/admin/releases/check-unique?${query.toString()}`, { headers });
           if (res.ok) {
             const data = await res.json();
             setCatNumExists(data.catNumExists);
@@ -202,7 +215,7 @@ export function ReleaseEditor({ initialRelease, isEditMode = false }: ReleaseEdi
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [catalogueNumber, title, smartLinkSlug, id]);
+  }, [catalogueNumber, title, smartLinkSlug, id, user]);
 
   // Validation rules for Publishing
   const isTitleValid = title.trim().length > 0;
@@ -347,9 +360,17 @@ export function ReleaseEditor({ initialRelease, isEditMode = false }: ReleaseEdi
       const url = isEditMode && id ? `/api/admin/releases/${id}` : '/api/admin/releases';
       const method = isEditMode && id ? 'PATCH' : 'POST';
 
+      let token = '';
+      if (user) {
+        token = await user.getIdToken();
+      }
+
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
 

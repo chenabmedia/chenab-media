@@ -19,7 +19,7 @@ import {
 import { Artist, Notification, Release } from '@/types';
 
 export default function ArtistDashboardPage() {
-  const { userProfile } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const [artist, setArtist] = useState<Artist | null>(null);
   const [releases, setReleases] = useState<Release[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -27,15 +27,23 @@ export default function ArtistDashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
     async function loadArtistPortalData() {
       try {
         setLoading(true);
         setError(null);
 
+        let headers: Record<string, string> = {};
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         const [profRes, relRes, notifRes] = await Promise.all([
-          fetch('/api/artist/profile'),
-          fetch('/api/artist/releases'),
-          fetch('/api/artist/notifications'),
+          fetch('/api/artist/profile', { headers }),
+          fetch('/api/artist/releases', { headers }),
+          fetch('/api/artist/notifications', { headers }),
         ]);
 
         if (profRes.ok) {
@@ -61,7 +69,7 @@ export default function ArtistDashboardPage() {
     }
 
     loadArtistPortalData();
-  }, []);
+  }, [user, authLoading]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const latestRelease = releases.length > 0 ? releases[0] : null;

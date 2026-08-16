@@ -17,19 +17,30 @@ export default function AdminSiteCmsPage() {
   const [activeTab, setActiveTab] = useState<'general' | 'navigation' | 'pages' | 'homepage' | 'footer' | 'social'>('general');
 
   useEffect(() => {
-    fetch('/api/admin/site')
-      .then((res) => res.json())
-      .then((data) => {
+    async function loadSiteConfig() {
+      try {
+        let headers: Record<string, string> = {};
+        if (user) {
+          try {
+            const token = await user.getIdToken();
+            headers['Authorization'] = `Bearer ${token}`;
+          } catch (e) {
+            console.warn('Could not get token:', e);
+          }
+        }
+        const res = await fetch('/api/admin/site', { headers });
+        const data = await res.json();
         if (data && !data.error) {
           setConfig({ ...DEFAULT_SITE_CONFIG, ...data });
         }
-        setLoading(false);
-      })
-      .catch((err) => {
+      } catch (err) {
         setErrorMsg('Failed to load site configuration');
+      } finally {
         setLoading(false);
-      });
-  }, []);
+      }
+    }
+    loadSiteConfig();
+  }, [user]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

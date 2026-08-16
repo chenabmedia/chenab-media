@@ -13,8 +13,10 @@ import {
 } from 'lucide-react';
 import { Release } from '@/types';
 import { useAudio } from '@/context/AudioContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function ArtistReleasesPage() {
+  const { user, loading: authLoading } = useAuth();
   const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,10 +24,17 @@ export default function ArtistReleasesPage() {
   const { playTrack } = useAudio();
 
   useEffect(() => {
+    if (authLoading) return;
+
     async function fetchReleases() {
       try {
         setLoading(true);
-        const res = await fetch('/api/artist/releases');
+        let headers: Record<string, string> = {};
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch('/api/artist/releases', { headers });
         if (res.ok) {
           const data = await res.json();
           setReleases(data.releases || []);
@@ -38,7 +47,7 @@ export default function ArtistReleasesPage() {
     }
 
     fetchReleases();
-  }, []);
+  }, [user, authLoading]);
 
   const filteredReleases = releases.filter((release) => {
     const matchesSearch =

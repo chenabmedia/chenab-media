@@ -6,6 +6,7 @@ import { ArrowLeft, Disc, Loader2 } from 'lucide-react';
 import { ReleaseEditor } from '@/components/admin/ReleaseEditor';
 import { Release } from '@/types';
 import { RELEASES } from '@/data/releases';
+import { useAuth } from '@/context/AuthContext';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -14,16 +15,24 @@ interface PageProps {
 export default function EditReleasePage({ params }: PageProps) {
   const resolvedParams = use(params);
   const id = resolvedParams.id;
+  const { user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState<boolean>(true);
   const [release, setRelease] = useState<Release | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
     async function fetchRelease() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/admin/releases/${id}`);
+        let headers: Record<string, string> = {};
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch(`/api/admin/releases/${id}`, { headers });
         if (res.ok) {
           const json = await res.json();
           setRelease(json.release);
@@ -49,7 +58,7 @@ export default function EditReleasePage({ params }: PageProps) {
       }
     }
     if (id) fetchRelease();
-  }, [id]);
+  }, [id, user, authLoading]);
 
   if (loading) {
     return (

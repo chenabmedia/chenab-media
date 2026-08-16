@@ -7,7 +7,7 @@ import { EmailIdentity } from '@/types/site';
 import { Mail, Plus, CheckCircle, AlertCircle, Menu, Trash2, Edit3, Shield } from 'lucide-react';
 
 export default function AdminEmailIdentitiesPage() {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [identities, setIdentities] = useState<EmailIdentity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,19 +22,13 @@ export default function AdminEmailIdentitiesPage() {
 
   const fetchIdentities = async () => {
     try {
-      let token = '';
-      if (user) {
-        try {
-          token = await user.getIdToken();
-        } catch (e) {
-          console.warn('Could not get token:', e);
-        }
-      }
+      if (!user) return;
+      const token = await user.getIdToken();
 
       const res = await fetch('/api/admin/email-identities', {
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
       });
       const contentType = res.headers.get('content-type') || '';
@@ -54,8 +48,9 @@ export default function AdminEmailIdentitiesPage() {
   };
 
   useEffect(() => {
+    if (authLoading) return;
     fetchIdentities();
-  }, [user]);
+  }, [user, authLoading]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

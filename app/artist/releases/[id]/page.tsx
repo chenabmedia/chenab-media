@@ -17,6 +17,7 @@ import {
 import { Release } from '@/types';
 import { RELEASES } from '@/data/releases';
 import { useAudio } from '@/context/AudioContext';
+import { useAuth } from '@/context/AuthContext';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -25,16 +26,24 @@ interface PageProps {
 export default function ArtistReleaseDetailPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const releaseId = resolvedParams.id;
+  const { user, loading: authLoading } = useAuth();
 
   const [release, setRelease] = useState<Release | null>(null);
   const [loading, setLoading] = useState(true);
   const { playTrack } = useAudio();
 
   useEffect(() => {
+    if (authLoading) return;
+
     async function fetchRelease() {
       try {
         setLoading(true);
-        const res = await fetch('/api/artist/releases');
+        let headers: Record<string, string> = {};
+        if (user) {
+          const token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch('/api/artist/releases', { headers });
         if (res.ok) {
           const data = await res.json();
           const match = (data.releases || []).find(
@@ -55,13 +64,13 @@ export default function ArtistReleaseDetailPage({ params }: PageProps) {
         }
       } catch (err) {
         console.error('Error fetching release detail:', err);
-      } fontFinally: {
+      } finally {
         setLoading(false);
       }
     }
 
     fetchRelease();
-  }, [releaseId]);
+  }, [releaseId, user, authLoading]);
 
   if (loading) {
     return (

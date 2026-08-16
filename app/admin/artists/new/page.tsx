@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import {
   ArrowLeft,
   Users,
@@ -22,6 +23,7 @@ import {
 
 export default function AdminNewArtistPage() {
   const router = useRouter();
+  const { user } = useAuth();
 
   const [saving, setSaving] = useState(false);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -61,6 +63,12 @@ export default function AdminNewArtistPage() {
         throw new Error('Stage Name and Email address are required fields.');
       }
 
+      if (!user) {
+        throw new Error('Authentication required. Please sign in as administrator.');
+      }
+
+      const token = await user.getIdToken();
+
       const parsedGenres = genres
         .split(',')
         .map((g) => g.trim())
@@ -98,12 +106,15 @@ export default function AdminNewArtistPage() {
 
       const res = await fetch('/api/admin/artists', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Failed to create artist profile');
       }
 

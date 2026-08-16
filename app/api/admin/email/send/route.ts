@@ -43,9 +43,15 @@ export async function POST(req: NextRequest) {
       recipientName,
     } = body;
 
-    if (!senderIdentityId || !to || !subject || !message) {
+    const missingFields: string[] = [];
+    if (!senderIdentityId || typeof senderIdentityId !== 'string' || !senderIdentityId.trim()) missingFields.push('senderIdentityId');
+    if (!to || typeof to !== 'string' || !to.trim()) missingFields.push('to');
+    if (!subject || typeof subject !== 'string' || !subject.trim()) missingFields.push('subject');
+    if (!message || typeof message !== 'string' || !message.trim()) missingFields.push('message');
+
+    if (missingFields.length > 0) {
       return NextResponse.json(
-        { error: 'Missing required fields: senderIdentityId, to, subject, message' },
+        { error: `Missing required fields: ${missingFields.join(', ')}` },
         { status: 400 }
       );
     }

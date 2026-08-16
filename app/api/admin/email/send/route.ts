@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
-import { db } from '@/lib/firebase/firestore';
-import { getDoc, doc } from 'firebase/firestore';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
 import { SendTemplateEmailOptions, sendTemplateEmail } from '@/lib/email/service';
 import { EmailIdentity } from '@/types/site';
@@ -85,11 +83,6 @@ export async function POST(req: NextRequest) {
             senderIdentity = { ...firstDoc.data(), id: firstDoc.id } as EmailIdentity;
           }
         }
-      }
-    } else if (db) {
-      const docSnap = await getDoc(doc(db, 'emailIdentities', senderIdentityId));
-      if (docSnap.exists()) {
-        senderIdentity = { ...docSnap.data(), id: docSnap.id } as EmailIdentity;
       }
     }
 

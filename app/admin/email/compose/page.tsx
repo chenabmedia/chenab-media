@@ -25,13 +25,14 @@ export default function AdminEmailComposePage() {
   const [sending, setSending] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [identityFetchError, setIdentityFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
 
     async function loadIdentities() {
       setIdentitiesLoading(true);
-      setErrorMsg(null);
+      setIdentityFetchError(null);
 
       try {
         if (!user) {
@@ -56,7 +57,7 @@ export default function AdminEmailComposePage() {
         }
 
         if (!res.ok) {
-          throw new Error(data.error || 'Failed to load email identities');
+          throw new Error(data.error || `Server authorization error (${res.status})`);
         }
 
         if (data && data.identities && Array.isArray(data.identities)) {
@@ -82,7 +83,8 @@ export default function AdminEmailComposePage() {
           setSelectedIdentityId('');
         }
       } catch (err: any) {
-        setErrorMsg(err.message || 'Failed to load sender identities');
+        setIdentityFetchError(err.message || 'Failed to load sender identities');
+        setIdentities([]);
       } finally {
         setIdentitiesLoading(false);
       }
@@ -221,8 +223,13 @@ export default function AdminEmailComposePage() {
                     <Loader2 size={14} className="animate-spin text-emerald-400" />
                     <span>Loading sender identities…</span>
                   </div>
+                ) : identityFetchError ? (
+                  <div className="p-3 bg-red-950/20 border border-red-900/50 text-red-400 text-xs flex items-center gap-2">
+                    <AlertCircle size={14} className="shrink-0 text-red-400" />
+                    <span>Authorization / API Error: {identityFetchError}</span>
+                  </div>
                 ) : identities.length === 0 ? (
-                  <div className="p-3 bg-red-950/20 border border-red-900/50 text-red-400 text-xs">
+                  <div className="p-3 bg-amber-950/20 border border-amber-900/50 text-amber-400 text-xs">
                     No verified CHENAB sender identities are configured.
                   </div>
                 ) : (

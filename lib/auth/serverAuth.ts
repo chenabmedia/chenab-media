@@ -1,7 +1,5 @@
 import { NextRequest } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
-import { db, getUserDocRef } from '@/lib/firebase/firestore';
-import { getDoc } from 'firebase/firestore';
 import { UserProfile } from '@/types/auth';
 import { AdminPermission, hasPermission, ALL_PERMISSIONS } from './permissions';
 import { isSuperAdminEmail, createSuperAdminProfile } from './bootstrap';
@@ -62,11 +60,6 @@ export async function verifyServerAuth(
     if (adminDb) {
       const snap = await adminDb.collection('users').doc(uid).get();
       if (snap.exists) {
-        profile = snap.data() as UserProfile;
-      }
-    } else {
-      const snap = await getDoc(getUserDocRef(uid));
-      if (snap.exists()) {
         profile = snap.data() as UserProfile;
       }
     }

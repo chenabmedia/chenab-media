@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
-import { db } from '@/lib/firebase/firestore';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import { EmailIdentity } from '@/types/site';
@@ -15,20 +13,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
     }
 
-    let identities: EmailIdentity[] = [];
-    if (adminDb) {
-      const snapshot = await adminDb.collection('emailIdentities').get();
-      identities = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return { ...data, id: doc.id } as EmailIdentity;
-      });
-    } else if (db) {
-      const snapshot = await getDocs(collection(db, 'emailIdentities'));
-      identities = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return { ...data, id: doc.id } as EmailIdentity;
-      });
+    if (!adminDb) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
+
+    const snapshot = await adminDb.collection('emailIdentities').get();
+    let identities: EmailIdentity[] = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return { ...data, id: doc.id } as EmailIdentity;
+    });
 
     if (identities.length === 0) {
       const defaultIdentities: Omit<EmailIdentity, 'id'>[] = [
@@ -39,13 +32,8 @@ export async function GET(req: NextRequest) {
       ];
 
       for (const item of defaultIdentities) {
-        if (adminDb) {
-          const ref = await adminDb.collection('emailIdentities').add(item);
-          identities.push({ id: ref.id, ...item });
-        } else if (db) {
-          const ref = await addDoc(collection(db, 'emailIdentities'), item);
-          identities.push({ id: ref.id, ...item });
-        }
+        const ref = await adminDb.collection('emailIdentities').add(item);
+        identities.push({ ...item, id: ref.id });
       }
     }
 
@@ -60,6 +48,10 @@ export async function POST(req: NextRequest) {
     const authRes = await verifyServerAuth(req, 'email.identities.manage');
     if (!authRes.authenticated || !authRes.profile) {
       return NextResponse.json({ error: authRes.error || 'Unauthorized: email.identities.manage permission required' }, { status: 403 });
+    }
+
+    if (!adminDb) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
 
     const body = await req.json();
@@ -88,14 +80,8 @@ export async function POST(req: NextRequest) {
       updatedAt: now,
     };
 
-    let newId = '';
-    if (adminDb) {
-      const ref = await adminDb.collection('emailIdentities').add(newIdentity);
-      newId = ref.id;
-    } else if (db) {
-      const ref = await addDoc(collection(db, 'emailIdentities'), newIdentity);
-      newId = ref.id;
-    }
+    const ref = await adminDb.collection('emailIdentities').add(newIdentity);
+    const newId = ref.id;
 
     await recordAuditLog({
       actorUid: authRes.profile.uid,
@@ -108,7 +94,7 @@ export async function POST(req: NextRequest) {
       metadata: { email, suffix: cleanSuffix },
     });
 
-    return NextResponse.json({ success: true, identity: { id: newId, ...newIdentity } });
+    return NextResponse.json({ success: true, identity: { ...newIdentity, id: newId } });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to create email identity' }, { status: 500 });
   }

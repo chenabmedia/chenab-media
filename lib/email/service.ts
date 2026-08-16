@@ -1,7 +1,5 @@
 import { Resend } from 'resend';
 import { adminDb } from '@/lib/firebase/admin';
-import { db } from '@/lib/firebase/firestore';
-import { collection, addDoc } from 'firebase/firestore';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import {
   EMAIL_TEMPLATES,
@@ -161,8 +159,6 @@ export async function sendTemplateEmail(
     try {
       if (adminDb) {
         await adminDb.collection('emailLogs').add(logEntry);
-      } else if (db) {
-        await addDoc(collection(db, 'emailLogs'), logEntry);
       }
     } catch (e) {
       console.error('[sendTemplateEmail] Error writing emailLog:', e);
@@ -239,8 +235,6 @@ export async function sendTemplateEmail(
   try {
     if (adminDb) {
       await adminDb.collection('emailLogs').add(logEntry);
-    } else if (db) {
-      await addDoc(collection(db, 'emailLogs'), logEntry);
     }
   } catch (e) {
     console.error('[sendTemplateEmail] Firestore emailLog write error:', e);

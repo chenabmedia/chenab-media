@@ -1,6 +1,4 @@
 import { adminDb } from './admin';
-import { db, handleFirestoreError, OperationType } from './firestore';
-import { collection, addDoc } from 'firebase/firestore';
 import { AuditLogEntry } from '@/types/admin';
 
 export interface RecordAuditLogParams {
@@ -80,17 +78,10 @@ export async function recordAuditLog(
     if (adminDb) {
       const docRef = await adminDb.collection('auditLogs').add(logData);
       return docRef.id;
-    } else {
-      const docRef = await addDoc(collection(db, 'auditLogs'), logData);
-      return docRef.id;
     }
   } catch (error) {
     console.error('Failed to record audit log:', error);
-    try {
-      handleFirestoreError(error, OperationType.CREATE, 'auditLogs');
-    } catch (e) {
-      // Return fallback ID rather than crashing caller
-    }
     return `local-log-${Date.now()}`;
   }
+  return `local-log-${Date.now()}`;
 }

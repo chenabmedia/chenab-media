@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
+import { adminDb, getAdminDb } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import { Release, ReleaseStatus, ReleaseType } from '@/types';
 
@@ -21,11 +21,12 @@ export async function GET(req: NextRequest) {
 
   try {
     let releasesList: Release[] = [];
+    const db = adminDb || getAdminDb();
 
-    if (adminDb) {
-      const snap = await adminDb.collection('releases').get();
+    if (db) {
+      const snap = await db.collection('releases').get();
       snap.forEach((doc) => {
-        releasesList.push({ id: doc.id, ...doc.data() } as Release);
+        releasesList.push({ ...doc.data(), id: doc.id } as Release);
       });
     }
 

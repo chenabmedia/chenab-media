@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminAuth, adminDb } from '@/lib/firebase/admin';
+import { adminAuth, adminDb, getAdminDb, getAdminAuth } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
 
 export async function GET(req: NextRequest) {
@@ -11,11 +11,12 @@ export async function GET(req: NextRequest) {
 
   try {
     let artistsList: any[] = [];
+    const db = adminDb || getAdminDb();
 
-    if (adminDb) {
-      const snap = await adminDb.collection('artists').get();
+    if (db) {
+      const snap = await db.collection('artists').get();
       snap.forEach((doc) => {
-        artistsList.push({ id: doc.id, ...doc.data() });
+        artistsList.push({ ...doc.data(), id: doc.id });
       });
     }
 

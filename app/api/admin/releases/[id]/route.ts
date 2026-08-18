@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
+import { adminDb, getAdminDb } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import { Release, ReleaseType } from '@/types';
 
@@ -23,17 +23,26 @@ export async function GET(
     return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
   }
 
-  if (!adminDb) {
+  const db = adminDb || getAdminDb();
+  if (!db) {
     return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
   }
 
   try {
-    const doc = await adminDb.collection('releases').doc(id).get();
+    let doc = await db.collection('releases').doc(id).get();
+    if (!doc.exists) {
+      // Fallback: query by stored 'id' field
+      const snap = await db.collection('releases').where('id', '==', id).limit(1).get();
+      if (!snap.empty) {
+        doc = snap.docs[0];
+      }
+    }
+
     if (!doc.exists) {
       return NextResponse.json({ error: 'Release record not found' }, { status: 404 });
     }
 
-    const releaseData = { id: doc.id, ...doc.data() };
+    const releaseData = { ...doc.data(), id: doc.id };
     return NextResponse.json({ release: releaseData }, { status: 200 });
   } catch (err: any) {
     console.error('Error fetching release:', err);
@@ -51,13 +60,22 @@ export async function PATCH(
     return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
   }
 
-  if (!adminDb) {
+  const db = adminDb || getAdminDb();
+  if (!db) {
     return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
   }
 
   try {
-    const docRef = adminDb.collection('releases').doc(id);
-    const existingSnap = await docRef.get();
+    let docRef = db.collection('releases').doc(id);
+    let existingSnap = await docRef.get();
+    if (!existingSnap.exists) {
+      const snap = await db.collection('releases').where('id', '==', id).limit(1).get();
+      if (!snap.empty) {
+        docRef = snap.docs[0].ref;
+        existingSnap = snap.docs[0];
+      }
+    }
+
     if (!existingSnap.exists) {
       return NextResponse.json({ error: 'Release record not found' }, { status: 404 });
     }
@@ -101,7 +119,7 @@ export async function PATCH(
 
     // 1. Check duplicate catalogue number if changed
     if (catNum !== existing.catalogueNumber) {
-      const catCheck = await adminDb
+      const catCheck = await db
         .collection('releases')
         .where('catalogueNumber', '==', catNum)
         .get();
@@ -115,11 +133,11 @@ export async function PATCH(
 
     // 2. Check duplicate release slug if changed
     if (slug !== existing.slug) {
-      const slugCheck = await adminDb
+      const slugCheck = await db
         .collection('releases')
         .where('slug', '==', slug)
         .get();
-      const duplicateDocs = slugCheck.docs.filter((d) => d.id !== id);
+      const duplicateDocs = slugCheck.docs.filter((d) => d.id !== docRef.id);
       if (duplicateDocs.length > 0) {
         return NextResponse.json(
           { error: `Release slug "/release/${slug}" already exists on another release.` },
@@ -129,16 +147,16 @@ export async function PATCH(
     }
 
     // 3. Check duplicate smart link slug if changed
-    const smartLinkQuery = await adminDb
+    const smartLinkQuery = await db
       .collection('smartLinks')
-      .where('releaseId', '==', id)
+      .where('releaseId', '==', docRef.id)
       .get();
     let existingSmartLinkId = existing.smartLink?.id || null;
     if (!existingSmartLinkId && !smartLinkQuery.empty) {
       existingSmartLinkId = smartLinkQuery.docs[0].id;
     }
 
-    const smartSlugCheck = await adminDb
+    const smartSlugCheck = await db
       .collection('smartLinks')
       .where('slug', '==', smartLinkSlug)
       .get();
@@ -257,11 +275,11 @@ export async function PATCH(
     await docRef.update(updatedData);
 
     // Update or create Smart Link collection entry
-    const smartLinkRef = adminDb.collection('smartLinks').doc(smartLinkInfo.id);
+    const smartLinkRef = db.collection('smartLinks').doc(smartLinkInfo.id);
     await smartLinkRef.set(
       {
         id: smartLinkInfo.id,
-        releaseId: id,
+        releaseId: docRef.id,
         slug: smartLinkSlug,
         title,
         artistIds: allArtistIds,
@@ -283,7 +301,7 @@ export async function PATCH(
           actorEmail: authRes.profile.email,
           action: 'RELEASE_MODIFIED',
           targetType: 'release',
-          targetId: id,
+          targetId: docRef.id,
           description: `Published release "${title}" (${catNum})`,
         });
 
@@ -291,7 +309,7 @@ export async function PATCH(
         try {
           const { sendTemplateEmail } = await import('@/lib/email/service');
           // Find primary artist emails
-          const artistDocs = await adminDb.collection('artists').where('id', 'in', primaryArtistIds.length > 0 ? primaryArtistIds : ['none']).get();
+          const artistDocs = await db.collection('artists').where('id', 'in', primaryArtistIds.length > 0 ? primaryArtistIds : ['none']).get();
           const targetEmails: string[] = [];
           artistDocs.forEach((aDoc) => {
             const aData = aDoc.data();
@@ -324,7 +342,7 @@ export async function PATCH(
               actorEmail: authRes.profile.email,
               actorUid: authRes.profile.uid,
               eventType: 'RELEASE_PUBLISHED',
-              relatedId: id,
+              relatedId: docRef.id,
             });
 
             await sendTemplateEmail({
@@ -345,7 +363,7 @@ export async function PATCH(
               actorEmail: authRes.profile.email,
               actorUid: authRes.profile.uid,
               eventType: 'MUSIC_LINK_PUBLISHED',
-              relatedId: id,
+              relatedId: docRef.id,
             });
           }
         } catch (emailErr) {
@@ -358,7 +376,7 @@ export async function PATCH(
           actorEmail: authRes.profile.email,
           action: 'RELEASE_MODIFIED',
           targetType: 'release',
-          targetId: id,
+          targetId: docRef.id,
           description: `Unpublished release "${title}" (${catNum})`,
         });
       } else if (status === 'ARCHIVED') {
@@ -368,7 +386,7 @@ export async function PATCH(
           actorEmail: authRes.profile.email,
           action: 'RELEASE_MODIFIED',
           targetType: 'release',
-          targetId: id,
+          targetId: docRef.id,
           description: `Archived release "${title}" (${catNum})`,
         });
       }
@@ -379,7 +397,7 @@ export async function PATCH(
         actorEmail: authRes.profile.email,
         action: 'RELEASE_MODIFIED',
         targetType: 'release',
-        targetId: id,
+        targetId: docRef.id,
         description: `Updated release metadata for "${title}" (${catNum})`,
       });
     }
@@ -391,13 +409,13 @@ export async function PATCH(
         actorEmail: authRes.profile.email,
         action: 'RELEASE_MODIFIED',
         targetType: 'release',
-        targetId: id,
+        targetId: docRef.id,
         description: `Updated DSP links for "${title}"`,
       });
     }
 
     return NextResponse.json(
-      { message: 'Release updated successfully', release: { id, ...updatedData } },
+      { message: 'Release updated successfully', release: { ...updatedData, id: docRef.id } },
       { status: 200 }
     );
   } catch (err: any) {
@@ -416,13 +434,22 @@ export async function DELETE(
     return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
   }
 
-  if (!adminDb) {
+  const db = adminDb || getAdminDb();
+  if (!db) {
     return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
   }
 
   try {
-    const docRef = adminDb.collection('releases').doc(id);
-    const snap = await docRef.get();
+    let docRef = db.collection('releases').doc(id);
+    let snap = await docRef.get();
+    if (!snap.exists) {
+      const querySnap = await db.collection('releases').where('id', '==', id).limit(1).get();
+      if (!querySnap.empty) {
+        docRef = querySnap.docs[0].ref;
+        snap = querySnap.docs[0];
+      }
+    }
+
     if (!snap.exists) {
       return NextResponse.json({ error: 'Release record not found' }, { status: 404 });
     }
@@ -442,7 +469,7 @@ export async function DELETE(
       actorEmail: authRes.profile.email,
       action: 'RELEASE_MODIFIED',
       targetType: 'release',
-      targetId: id,
+      targetId: docRef.id,
       description: `Archived release "${existing.title}" (${existing.catalogueNumber})`,
     });
 

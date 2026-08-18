@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
+import { adminDb, getAdminDb } from '@/lib/firebase/admin';
 
 export async function GET(req: NextRequest) {
   const authRes = await verifyServerAuth(req);
@@ -11,7 +11,8 @@ export async function GET(req: NextRequest) {
   const { uid, artistId, displayName, email } = authRes.profile;
 
   try {
-    if (!adminDb) {
+    const db = adminDb || getAdminDb();
+    if (!db) {
       return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
     }
 
@@ -19,18 +20,18 @@ export async function GET(req: NextRequest) {
 
     // 1. Try fetching by user's artistId if attached to userProfile
     if (artistId) {
-      const doc = await adminDb.collection('artists').doc(artistId).get();
+      const doc = await db.collection('artists').doc(artistId).get();
       if (doc.exists) {
-        artistData = { id: doc.id, ...doc.data() };
+        artistData = { ...doc.data(), id: doc.id };
       }
     }
 
     // 2. Fallback: Query artists collection where userId == uid
     if (!artistData) {
-      const snap = await adminDb.collection('artists').where('userId', '==', uid).get();
+      const snap = await db.collection('artists').where('userId', '==', uid).get();
       if (!snap.empty) {
         const doc = snap.docs[0];
-        artistData = { id: doc.id, ...doc.data() };
+        artistData = { ...doc.data(), id: doc.id };
       }
     }
 
@@ -132,7 +133,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        artist: { id: updatedDoc.id, ...updatedDoc.data() },
+        artist: { ...updatedDoc.data(), id: updatedDoc.id },
       },
       { status: 200 }
     );

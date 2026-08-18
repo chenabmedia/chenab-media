@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
+import { adminDb, getAdminDb } from '@/lib/firebase/admin';
 import { RELEASES } from '@/data/releases';
 
 export async function GET(req: NextRequest) {
@@ -13,19 +13,20 @@ export async function GET(req: NextRequest) {
 
   try {
     let releasesList: any[] = [];
+    const db = adminDb || getAdminDb();
 
-    if (adminDb) {
+    if (db) {
       // Fetch artist doc to get stageName and releaseIds
       let targetArtistId = artistId;
       let stageName = '';
 
       if (targetArtistId) {
-        const aDoc = await adminDb.collection('artists').doc(targetArtistId).get();
+        const aDoc = await db.collection('artists').doc(targetArtistId).get();
         if (aDoc.exists) {
           stageName = aDoc.data()?.stageName || aDoc.data()?.name || '';
         }
       } else {
-        const snap = await adminDb.collection('artists').where('userId', '==', uid).get();
+        const snap = await db.collection('artists').where('userId', '==', uid).get();
         if (!snap.empty) {
           targetArtistId = snap.docs[0].id;
           stageName = snap.docs[0].data()?.stageName || snap.docs[0].data()?.name || '';
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
       }
 
       // Query Firestore releases
-      const releasesSnap = await adminDb.collection('releases').get();
+      const releasesSnap = await db.collection('releases').get();
       releasesSnap.forEach((doc) => {
         const data = doc.data();
         const artistIds: string[] = data.artistIds || [];
@@ -44,7 +45,7 @@ export async function GET(req: NextRequest) {
           artistIds.includes(uid) ||
           nameMatch
         ) {
-          releasesList.push({ id: doc.id, ...data });
+          releasesList.push({ ...data, id: doc.id });
         }
       });
     }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
+import { adminDb, getAdminDb } from '@/lib/firebase/admin';
 import { AuditLogEntry } from '@/types/admin';
 
 export async function GET(req: NextRequest) {
@@ -11,16 +11,17 @@ export async function GET(req: NextRequest) {
 
   try {
     const logs: AuditLogEntry[] = [];
+    const db = adminDb || getAdminDb();
 
-    if (adminDb) {
-      const snap = await adminDb
+    if (db) {
+      const snap = await db
         .collection('auditLogs')
         .orderBy('timestamp', 'desc')
         .limit(100)
         .get();
 
       snap.forEach((doc) => {
-        logs.push({ id: doc.id, ...doc.data() } as AuditLogEntry);
+        logs.push({ ...doc.data(), id: doc.id } as AuditLogEntry);
       });
     }
 

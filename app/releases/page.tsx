@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Play, Search, Grid, List, Disc, ArrowUpDown } from 'lucide-react';
-import { RELEASES, searchReleases } from '@/data/releases';
+import { RELEASES } from '@/data/releases';
 import { useAudio } from '@/context/AudioContext';
 import { Release } from '@/types';
 
@@ -38,9 +38,9 @@ export default function ReleasesPage() {
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch =
       !query ||
-      rel.title.toLowerCase().includes(query) ||
-      rel.catalogueNumber.toLowerCase().includes(query) ||
-      rel.artistName.toLowerCase().includes(query) ||
+      (rel.title || '').toLowerCase().includes(query) ||
+      (rel.catalogueNumber || '').toLowerCase().includes(query) ||
+      (rel.artistName || '').toLowerCase().includes(query) ||
       (rel.genres && rel.genres.some((g) => g.toLowerCase().includes(query)));
 
     const typeUpper = selectedType.toUpperCase();
@@ -57,13 +57,13 @@ export default function ReleasesPage() {
 
   filteredReleases.sort((a, b) => {
     if (sortOption === 'NEWEST') {
-      return new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime();
+      return new Date(b.releaseDate || 0).getTime() - new Date(a.releaseDate || 0).getTime();
     }
     if (sortOption === 'OLDEST') {
-      return new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime();
+      return new Date(a.releaseDate || 0).getTime() - new Date(b.releaseDate || 0).getTime();
     }
     if (sortOption === 'AZ') {
-      return a.title.localeCompare(b.title);
+      return (a.title || '').localeCompare(b.title || '');
     }
     return 0;
   });
@@ -174,7 +174,7 @@ export default function ReleasesPage() {
               <div>
                 <div className="relative aspect-square overflow-hidden bg-[#151515] mb-4 sm:mb-5">
                   <img
-                    src={release.cover}
+                    src={release.cover || release.coverImage}
                     alt={release.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
@@ -209,7 +209,7 @@ export default function ReleasesPage() {
                     <span>{(release.genres || [release.genre || 'Music']).join(' / ')}</span>
                   </div>
                   <h3 className="font-display font-bold text-lg sm:text-xl text-[#F5F5F5] group-hover:text-white transition-colors">
-                    <Link href={`/release/${release.slug}`}>{release.title}</Link>
+                    <Link href={`/release/${release.slug || release.id}`}>{release.title}</Link>
                   </h3>
                   <p className="font-sans text-sm text-[#999999]">
                     {release.artistName}
@@ -223,7 +223,7 @@ export default function ReleasesPage() {
               <div className="pt-4 sm:pt-5 mt-4 sm:mt-5 border-t border-[#181818] flex items-center justify-between font-mono text-xs text-[#666666]">
                 <span>RELEASED: {release.releaseDate}</span>
                 <Link
-                  href={`/release/${release.slug}`}
+                  href={`/release/${release.slug || release.id}`}
                   className="text-[#F5F5F5] hover:underline py-1 min-h-[36px] inline-flex items-center"
                 >
                   VIEW RELEASE &rarr;
@@ -254,7 +254,7 @@ export default function ReleasesPage() {
                     <span>{(release.genres || [release.genre || 'Music']).join(' / ')}</span>
                   </div>
                   <h3 className="font-display font-bold text-base sm:text-lg text-[#F5F5F5] group-hover:text-white">
-                    <Link href={`/release/${release.slug}`}>{release.title}</Link>
+                    <Link href={`/release/${release.slug || release.id}`}>{release.title}</Link>
                   </h3>
                   <p className="font-sans text-xs text-[#888888]">{release.artistName}</p>
                 </div>
@@ -279,7 +279,7 @@ export default function ReleasesPage() {
                 )}
                 <span className="text-[#666666] hidden sm:inline">{release.releaseDate}</span>
                 <Link
-                  href={`/release/${release.slug}`}
+                  href={`/release/${release.slug || release.id}`}
                   className="px-4 py-2.5 min-h-[44px] flex items-center justify-center bg-[#F5F5F5] text-[#080808] font-bold hover:bg-white uppercase text-[11px]"
                 >
                   RELEASE PAGE

@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useEffect, use } from 'react';
+import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ExternalLink, Play, Disc, MapPin } from 'lucide-react';
-import { getArtistBySlug } from '@/data/artists';
-import { getReleasesByArtistId } from '@/data/releases';
+import { ArrowLeft, ExternalLink, Play, Disc, MapPin, Loader2 } from 'lucide-react';
+import { getArtistBySlug as getStaticArtistBySlug } from '@/data/artists';
+import { getReleasesByArtistId as getStaticReleasesByArtistId } from '@/data/releases';
 import { useAudio } from '@/context/AudioContext';
+import { Artist, Release } from '@/types';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -18,15 +19,84 @@ export default function ArtistDetailPage({ params }: PageProps) {
   const router = useRouter();
   const { playTrack } = useAudio();
 
-  const artist = slug ? getArtistBySlug(slug) : undefined;
+  const [artist, setArtist] = useState<Artist | null | undefined>(undefined);
+  const [artistReleases, setArtistReleases] = useState<Release[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (artist) {
-      document.title = `${artist.name} | CHENAB MEDIA Artist Roster`;
-    } else {
-      document.title = 'Artist Not Found | CHENAB MEDIA';
+    async function loadArtistData() {
+      if (!slug) return;
+      try {
+        setLoading(true);
+        const [artistRes, releasesRes] = await Promise.all([
+          fetch(`/api/artists/${slug}`),
+          fetch('/api/releases'),
+        ]);
+
+        let loadedArtist: Artist | null = null;
+
+        if (artistRes.ok) {
+          const aData = await artistRes.json();
+          if (aData.artist) {
+            loadedArtist = aData.artist;
+          }
+        }
+
+        // Fallback to static if API 404 or fails
+        if (!loadedArtist) {
+          const staticFound = getStaticArtistBySlug(slug);
+          if (staticFound) {
+            loadedArtist = staticFound;
+          }
+        }
+
+        setArtist(loadedArtist);
+
+        if (loadedArtist) {
+          document.title = `${loadedArtist.stageName || loadedArtist.name} | CHENAB MEDIA Artist Roster`;
+
+          if (releasesRes.ok) {
+            const rData = await releasesRes.json();
+            if (rData.releases && Array.isArray(rData.releases)) {
+              const matched = rData.releases.filter(
+                (r: Release) =>
+                  (r.artistIds && r.artistIds.includes(loadedArtist!.id)) ||
+                  (r.artistName &&
+                    r.artistName.toLowerCase().includes((loadedArtist!.stageName || loadedArtist!.name || '').toLowerCase()))
+              );
+              setArtistReleases(matched);
+            }
+          } else {
+            setArtistReleases(getStaticReleasesByArtistId(loadedArtist.id));
+          }
+        } else {
+          document.title = 'Artist Not Found | CHENAB MEDIA';
+        }
+      } catch (err) {
+        console.warn('Error loading public artist details:', err);
+        const staticFallback = getStaticArtistBySlug(slug);
+        setArtist(staticFallback || null);
+        if (staticFallback) {
+          setArtistReleases(getStaticReleasesByArtistId(staticFallback.id));
+        }
+      } finally {
+        setLoading(false);
+      }
     }
-  }, [artist]);
+
+    loadArtistData();
+  }, [slug]);
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto px-6 py-28 text-center space-y-4">
+        <Loader2 size={32} className="mx-auto text-[#666666] animate-spin" />
+        <p className="font-mono text-xs text-[#888888] tracking-widest uppercase">
+          LOADING ARTIST PROFILE...
+        </p>
+      </div>
+    );
+  }
 
   if (!artist) {
     return (
@@ -50,7 +120,10 @@ export default function ArtistDetailPage({ params }: PageProps) {
     );
   }
 
-  const artistReleases = getReleasesByArtistId(artist.id);
+  const stageName = artist.stageName || artist.name;
+  const image = artist.profileImage || artist.image;
+  const genres = artist.genres || [];
+  const socialLinks = artist.socialLinks || {};
 
   return (
     <div className="space-y-10 sm:space-y-16 pb-16 sm:pb-24">
@@ -63,19 +136,19 @@ export default function ArtistDetailPage({ params }: PageProps) {
           <span>ARTIST DIRECTORY</span>
         </button>
         <div className="font-mono text-xs text-[#666666] tracking-widest uppercase">
-          STATUS: {artist.status}
+          STATUS: {artist.status || 'ACTIVE'}
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-5 sm:px-6 md:px-8 grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-12 items-center">
         <div className="lg:col-span-5 aspect-square bg-[#151515] border border-[#222222] overflow-hidden shadow-2xl relative">
           <img
-            src={artist.image}
-            alt={artist.name}
+            src={image}
+            alt={stageName}
             className="w-full h-full object-cover"
           />
           <div className="absolute top-3 sm:top-4 left-3 sm:left-4 bg-[#080808]/90 backdrop-blur-md px-2.5 sm:px-3 py-1 font-mono text-xs text-[#F5F5F5] border border-[#222222] uppercase">
-            {artist.status}
+            {artist.status || 'ACTIVE'}
           </div>
         </div>
 
@@ -83,15 +156,15 @@ export default function ArtistDetailPage({ params }: PageProps) {
           <div className="space-y-2 sm:space-y-3">
             <div className="flex items-center gap-2 font-mono text-xs text-[#888888]">
               <MapPin size={14} className="text-[#F5F5F5]" />
-              <span className="text-[#F5F5F5] uppercase font-semibold">{artist.location}</span>
+              <span className="text-[#F5F5F5] uppercase font-semibold">{artist.location || 'Jammu & Kashmir'}</span>
             </div>
 
             <h1 className="font-display font-black text-[clamp(2.25rem,6vw,4.5rem)] text-[#F5F5F5] tracking-tight uppercase leading-none">
-              {artist.name}
+              {stageName}
             </h1>
 
             <div className="flex flex-wrap gap-1.5 sm:gap-2 pt-1 sm:pt-2">
-              {artist.genres.map((genre, idx) => (
+              {genres.map((genre, idx) => (
                 <span
                   key={idx}
                   className="font-mono text-xs text-[#CCCCCC] px-3 py-1 bg-[#111111] border border-[#222222]"
@@ -119,9 +192,9 @@ export default function ArtistDetailPage({ params }: PageProps) {
               STREAMING & SOCIAL PROFILES
             </h3>
             <div className="flex flex-wrap gap-2.5 sm:gap-3 font-mono text-xs">
-              {artist.socialLinks.spotify && (
+              {socialLinks.spotify && (
                 <a
-                  href={artist.socialLinks.spotify}
+                  href={socialLinks.spotify}
                   target="_blank"
                   rel="noreferrer"
                   className="px-4 py-2.5 min-h-[44px] border border-[#222222] bg-[#0C0C0C] hover:border-[#555555] text-[#F5F5F5] flex items-center gap-2"
@@ -130,9 +203,9 @@ export default function ArtistDetailPage({ params }: PageProps) {
                   <ExternalLink size={12} className="text-[#888888]" />
                 </a>
               )}
-              {artist.socialLinks.appleMusic && (
+              {socialLinks.appleMusic && (
                 <a
-                  href={artist.socialLinks.appleMusic}
+                  href={socialLinks.appleMusic}
                   target="_blank"
                   rel="noreferrer"
                   className="px-4 py-2.5 min-h-[44px] border border-[#222222] bg-[#0C0C0C] hover:border-[#555555] text-[#F5F5F5] flex items-center gap-2"
@@ -141,9 +214,9 @@ export default function ArtistDetailPage({ params }: PageProps) {
                   <ExternalLink size={12} className="text-[#888888]" />
                 </a>
               )}
-              {artist.socialLinks.instagram && (
+              {socialLinks.instagram && (
                 <a
-                  href={artist.socialLinks.instagram}
+                  href={socialLinks.instagram}
                   target="_blank"
                   rel="noreferrer"
                   className="px-4 py-2.5 min-h-[44px] border border-[#222222] bg-[#0C0C0C] hover:border-[#555555] text-[#F5F5F5] flex items-center gap-2"
@@ -152,9 +225,9 @@ export default function ArtistDetailPage({ params }: PageProps) {
                   <ExternalLink size={12} className="text-[#888888]" />
                 </a>
               )}
-              {artist.socialLinks.youtube && (
+              {socialLinks.youtube && (
                 <a
-                  href={artist.socialLinks.youtube}
+                  href={socialLinks.youtube}
                   target="_blank"
                   rel="noreferrer"
                   className="px-4 py-2.5 min-h-[44px] border border-[#222222] bg-[#0C0C0C] hover:border-[#555555] text-[#F5F5F5] flex items-center gap-2"
@@ -196,7 +269,7 @@ export default function ArtistDetailPage({ params }: PageProps) {
                 <div>
                   <div className="relative aspect-square overflow-hidden bg-[#151515] mb-4 sm:mb-5">
                     <img
-                      src={release.cover}
+                      src={release.cover || release.coverImage}
                       alt={release.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
@@ -207,11 +280,11 @@ export default function ArtistDetailPage({ params }: PageProps) {
 
                   <div className="space-y-1">
                     <div className="flex items-center justify-between font-mono text-[11px] text-[#777777]">
-                      <span>{release.type}</span>
-                      <span>{release.releaseDate.split('-')[0]}</span>
+                      <span>{release.type || release.releaseType}</span>
+                      <span>{(release.releaseDate || '').split('-')[0]}</span>
                     </div>
                     <h3 className="font-display font-bold text-lg sm:text-xl text-[#F5F5F5] group-hover:text-white transition-colors">
-                      <Link href={`/release/${release.slug}`}>{release.title}</Link>
+                      <Link href={`/release/${release.slug || release.id}`}>{release.title}</Link>
                     </h3>
                   </div>
                 </div>
@@ -234,7 +307,7 @@ export default function ArtistDetailPage({ params }: PageProps) {
                     </button>
                   )}
                   <Link
-                    href={`/release/${release.slug}`}
+                    href={`/release/${release.slug || release.id}`}
                     className="text-[#F5F5F5] hover:underline min-h-[36px] py-1 inline-flex items-center"
                   >
                     DETAILS &rarr;

@@ -1,18 +1,48 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Play, ChevronRight } from 'lucide-react';
 import { getAllReleases } from '@/data/releases';
 import { getAllArtists } from '@/data/artists';
 import { getAllJournalPosts } from '@/data/journal';
 import { useAudio } from '@/context/AudioContext';
+import { Artist, Release } from '@/types';
 
 export default function HomePage() {
   const { playTrack } = useAudio();
-  const releases = getAllReleases();
-  const artists = getAllArtists();
+  const [releases, setReleases] = useState<Release[]>(getAllReleases());
+  const [artists, setArtists] = useState<Artist[]>(getAllArtists());
   const posts = getAllJournalPosts();
+
+  useEffect(() => {
+    async function loadPublicLiveCatalog() {
+      try {
+        const [relRes, artRes] = await Promise.all([
+          fetch('/api/releases'),
+          fetch('/api/artists'),
+        ]);
+
+        if (relRes.ok) {
+          const relData = await relRes.json();
+          if (relData.releases && relData.releases.length > 0) {
+            setReleases(relData.releases);
+          }
+        }
+
+        if (artRes.ok) {
+          const artData = await artRes.json();
+          if (artData.artists && artData.artists.length > 0) {
+            setArtists(artData.artists);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load dynamic catalog on home page, using fallback:', err);
+      }
+    }
+
+    loadPublicLiveCatalog();
+  }, []);
 
   const featuredReleases = releases.slice(0, 4);
   const featuredArtists = artists.slice(0, 4);
@@ -111,7 +141,7 @@ export default function HomePage() {
               <div>
                 <div className="relative aspect-square overflow-hidden bg-[#151515] mb-4">
                   <img
-                    src={release.cover}
+                    src={release.cover || release.coverImage}
                     alt={release.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
                   />
@@ -142,7 +172,7 @@ export default function HomePage() {
                     {release.releaseType || release.type} &bull; {release.genre || (release.genres && release.genres[0]) || 'Music'}
                   </span>
                   <h3 className="font-display font-bold text-lg text-[#F5F5F5] group-hover:text-white transition-colors line-clamp-1">
-                    <Link href={`/release/${release.slug}`}>{release.title}</Link>
+                    <Link href={`/release/${release.slug || release.id}`}>{release.title}</Link>
                   </h3>
                   <p className="font-sans text-xs text-[#999999] line-clamp-1">
                     {release.artistName}
@@ -153,7 +183,7 @@ export default function HomePage() {
               <div className="pt-4 mt-4 border-t border-[#181818] flex items-center justify-between font-mono text-[11px] text-[#666666]">
                 <span>{release.releaseDate}</span>
                 <Link
-                  href={`/release/${release.slug}`}
+                  href={`/release/${release.slug || release.id}`}
                   className="text-[#888888] hover:text-[#F5F5F5] transition-colors py-1 min-h-[36px] inline-flex items-center"
                 >
                   LISTEN / ORDER &rarr;
@@ -188,14 +218,14 @@ export default function HomePage() {
             {featuredArtists.map((artist) => (
               <Link
                 key={artist.id}
-                href={`/artist/${artist.slug}`}
+                href={`/artist/${artist.slug || artist.id}`}
                 className="group border border-[#1A1A1A] bg-[#080808] p-5 sm:p-6 hover:border-[#333333] transition-all duration-300 flex flex-col justify-between"
               >
                 <div>
                   <div className="aspect-square overflow-hidden bg-[#151515] mb-5 sm:mb-6 grayscale group-hover:grayscale-0 transition-all duration-500">
                     <img
-                      src={artist.image}
-                      alt={artist.name}
+                      src={artist.profileImage || artist.image}
+                      alt={artist.stageName || artist.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   </div>
@@ -203,7 +233,7 @@ export default function HomePage() {
                     {artist.location}
                   </span>
                   <h3 className="font-display font-bold text-xl text-[#F5F5F5] group-hover:text-white transition-colors mt-1">
-                    {artist.name}
+                    {artist.stageName || artist.name}
                   </h3>
                   <p className="font-sans text-xs text-[#888888] line-clamp-2 mt-2 leading-relaxed">
                     {artist.bio}
@@ -211,7 +241,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="pt-5 mt-5 border-t border-[#181818] flex items-center justify-between font-mono text-[11px] text-[#666666]">
-                  <span>STATUS: {artist.status}</span>
+                  <span>STATUS: {artist.status || 'ACTIVE'}</span>
                   <span className="text-[#888888] group-hover:text-[#F5F5F5] transition-colors">
                     PROFILE &rarr;
                   </span>

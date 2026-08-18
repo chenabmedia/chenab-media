@@ -1,16 +1,65 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Users, Search, ArrowUpRight, Disc } from 'lucide-react';
-import { searchArtists } from '@/data/artists';
+import { ARTISTS } from '@/data/artists';
 import { RELEASES } from '@/data/releases';
+import { Artist, Release } from '@/types';
 
 export default function ArtistsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [artistsList, setArtistsList] = useState<Artist[]>(ARTISTS);
+  const [releasesList, setReleasesList] = useState<Release[]>(RELEASES);
 
-  const filteredArtists = searchArtists(searchQuery, statusFilter);
+  useEffect(() => {
+    async function loadPublicArtistsAndReleases() {
+      try {
+        const [artistsRes, releasesRes] = await Promise.all([
+          fetch('/api/artists'),
+          fetch('/api/releases'),
+        ]);
+
+        if (artistsRes.ok) {
+          const aData = await artistsRes.json();
+          if (aData.artists && aData.artists.length > 0) {
+            setArtistsList(aData.artists);
+          }
+        }
+
+        if (releasesRes.ok) {
+          const rData = await releasesRes.json();
+          if (rData.releases && rData.releases.length > 0) {
+            setReleasesList(rData.releases);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch public catalog, using fallback:', err);
+      }
+    }
+
+    loadPublicArtistsAndReleases();
+  }, []);
+
+  const filteredArtists = artistsList.filter((artist) => {
+    const query = searchQuery.toLowerCase().trim();
+    const artistName = (artist.stageName || artist.name || '').toLowerCase();
+    const artistLocation = (artist.location || '').toLowerCase();
+    const artistGenres = (artist.genres || []).join(' ').toLowerCase();
+
+    const matchesQuery =
+      !query ||
+      artistName.includes(query) ||
+      artistLocation.includes(query) ||
+      artistGenres.includes(query);
+
+    const matchesStatus =
+      statusFilter === 'ALL' ||
+      (artist.status || '').toUpperCase() === statusFilter.toUpperCase();
+
+    return matchesQuery && matchesStatus;
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-5 sm:px-6 md:px-8 py-8 sm:py-12 space-y-8 sm:space-y-12">
@@ -70,10 +119,10 @@ export default function ArtistsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
           {filteredArtists.map((artist) => {
-            const releaseCount = RELEASES.filter(
+            const releaseCount = releasesList.filter(
               (r) =>
-                r.artistIds.includes(artist.id) ||
-                r.artistName.toLowerCase().includes((artist.stageName || artist.name || '').toLowerCase())
+                (r.artistIds && r.artistIds.includes(artist.id)) ||
+                (r.artistName && r.artistName.toLowerCase().includes((artist.stageName || artist.name || '').toLowerCase()))
             ).length;
 
             return (
@@ -84,8 +133,8 @@ export default function ArtistsPage() {
                 <div>
                   <div className="aspect-square overflow-hidden bg-[#151515] mb-4 sm:mb-6 sm:grayscale group-hover:grayscale-0 transition-all duration-500 relative">
                     <img
-                      src={artist.image}
-                      alt={artist.name}
+                      src={artist.profileImage || artist.image}
+                      alt={artist.stageName || artist.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                     <div className="absolute top-3 left-3 bg-[#080808]/90 backdrop-blur-md px-2.5 py-1 font-mono text-[10px] text-[#F5F5F5] border border-[#222222] uppercase">
@@ -106,11 +155,11 @@ export default function ArtistsPage() {
                     </div>
 
                     <h3 className="font-display font-bold text-xl sm:text-2xl text-[#F5F5F5] group-hover:text-white transition-colors">
-                      <Link href={`/artist/${artist.slug}`}>{artist.name}</Link>
+                      <Link href={`/artist/${artist.slug || artist.id}`}>{artist.stageName || artist.name}</Link>
                     </h3>
 
                     <div className="flex flex-wrap gap-1.5 py-1">
-                      {artist.genres.map((g, i) => (
+                      {(artist.genres || []).map((g, i) => (
                         <span
                           key={i}
                           className="font-mono text-[10px] text-[#888888] px-2 py-0.5 border border-[#222222] bg-[#111111]"
@@ -129,7 +178,7 @@ export default function ArtistsPage() {
                 <div className="pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-[#181818] flex items-center justify-between font-mono text-xs">
                   <span className="text-[#666666]">ROSTER PROFILE</span>
                   <Link
-                    href={`/artist/${artist.slug}`}
+                    href={`/artist/${artist.slug || artist.id}`}
                     className="text-[#F5F5F5] hover:underline py-1 min-h-[36px] inline-flex items-center"
                   >
                     VIEW DISCOGRAPHY &rarr;

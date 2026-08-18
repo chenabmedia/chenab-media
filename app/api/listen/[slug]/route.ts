@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase/admin';
+import { adminDb, getAdminDb } from '@/lib/firebase/admin';
+import { getPublicReleaseBySlug } from '@/lib/firebase/serverCatalog';
 import { getReleaseBySlug, RELEASES } from '@/data/releases';
 import { SmartLink, Release } from '@/types';
 
@@ -12,47 +13,49 @@ export async function GET(
   try {
     let smartLink: SmartLink | null = null;
     let release: Release | null = null;
+    const db = adminDb || getAdminDb();
 
-    if (adminDb) {
+    if (db) {
       // 1. Query smartLinks collection by slug
-      const smartLinkSnap = await adminDb
-        .collection('smartLinks')
-        .where('slug', '==', slug)
-        .get();
-
-      if (!smartLinkSnap.empty) {
-        const doc = smartLinkSnap.docs[0];
-        smartLink = { id: doc.id, ...doc.data() } as SmartLink;
-
-        // Fetch associated release
-        if (smartLink.releaseId) {
-          const relDoc = await adminDb.collection('releases').doc(smartLink.releaseId).get();
-          if (relDoc.exists) {
-            release = { id: relDoc.id, ...relDoc.data() } as Release;
-          }
-        }
-      } else {
-        // 2. Query releases collection by slug or smartLink.slug
-        const releaseSnap = await adminDb
-          .collection('releases')
+      try {
+        const smartLinkSnap = await db
+          .collection('smartLinks')
           .where('slug', '==', slug)
           .get();
 
-        if (!releaseSnap.empty) {
-          const doc = releaseSnap.docs[0];
-          release = { id: doc.id, ...doc.data() } as Release;
-          smartLink = {
-            id: release.smartLink?.id || `sm-${release.id}`,
-            releaseId: release.id,
-            slug: release.smartLink?.slug || release.slug,
-            title: release.title,
-            artistIds: release.artistIds || [],
-            artistName: release.artistName,
-            artwork: release.coverImage || release.cover || '',
-            dspLinks: release.dspLinks || release.streamingLinks || {},
-            status: 'ACTIVE',
-          };
+        if (!smartLinkSnap.empty) {
+          const doc = smartLinkSnap.docs[0];
+          smartLink = { ...doc.data(), id: doc.id } as SmartLink;
+
+          // Fetch associated release
+          if (smartLink.releaseId) {
+            const relDoc = await db.collection('releases').doc(smartLink.releaseId).get();
+            if (relDoc.exists) {
+              release = { ...relDoc.data(), id: relDoc.id } as Release;
+            }
+          }
         }
+      } catch (e) {
+        console.warn('SmartLink lookup note:', e);
+      }
+    }
+
+    // 2. Query release by slug from serverCatalog (covers Firestore Admin & REST)
+    if (!release) {
+      const foundRel = await getPublicReleaseBySlug(slug);
+      if (foundRel) {
+        release = foundRel;
+        smartLink = {
+          id: foundRel.smartLink?.id || `sm-${foundRel.id}`,
+          releaseId: foundRel.id,
+          slug: foundRel.smartLink?.slug || foundRel.slug,
+          title: foundRel.title,
+          artistIds: foundRel.artistIds || [],
+          artistName: foundRel.artistName,
+          artwork: foundRel.coverImage || foundRel.cover || '',
+          dspLinks: foundRel.dspLinks || foundRel.streamingLinks || {},
+          status: 'ACTIVE',
+        };
       }
     }
 
@@ -100,11 +103,12 @@ export async function POST(
       return NextResponse.json({ error: 'Missing platform parameter' }, { status: 400 });
     }
 
-    if (adminDb) {
+    const db = adminDb || getAdminDb();
+    if (db) {
       const userAgent = req.headers.get('user-agent') || 'Unknown';
       const referrer = req.headers.get('referer') || 'Direct';
 
-      const eventRef = adminDb.collection('smartLinkEvents').doc();
+      const eventRef = db.collection('smartLinkEvents').doc();
       await eventRef.set({
         id: eventRef.id,
         smartLinkId: smartLinkId || '',
@@ -118,7 +122,7 @@ export async function POST(
 
       // Increment click count on smartLink document if smartLinkId exists
       if (smartLinkId) {
-        const slRef = adminDb.collection('smartLinks').doc(smartLinkId);
+        const slRef = db.collection('smartLinks').doc(smartLinkId);
         const slDoc = await slRef.get();
         if (slDoc.exists) {
           const currentCount = slDoc.data()?.clickCount || 0;

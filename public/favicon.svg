@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#080808" rx="92.16"/>
+  <rect x="30.72" y="30.72" width="450.56" height="450.56" fill="none" stroke="#1F1F1F" stroke-width="10.24" rx="71.68"/>
+  <!-- Stylized CHENAB Geometric Monogram -->
+  <path d="M368.64 174.08 C317.44 112.64 194.56 112.64 143.36 174.08 C92.16 235.52 92.16 327.68 143.36 389.12 C194.56 450.56 317.44 450.56 368.64 389.12" 
+        fill="none" stroke="#FFFFFF" stroke-width="51.2" stroke-linecap="round"/>
+  <!-- Inner core resonance dot -->
+  <circle cx="256.0" cy="281.6" r="35.84" fill="#FFFFFF"/>
+</svg>

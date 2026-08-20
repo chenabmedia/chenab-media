@@ -4,8 +4,6 @@ import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ExternalLink, Play, Disc, MapPin, Loader2 } from 'lucide-react';
-import { getArtistBySlug as getStaticArtistBySlug } from '@/data/artists';
-import { getReleasesByArtistId as getStaticReleasesByArtistId } from '@/data/releases';
 import { useAudio } from '@/context/AudioContext';
 import { Artist, Release } from '@/types';
 
@@ -42,14 +40,6 @@ export default function ArtistDetailPage({ params }: PageProps) {
           }
         }
 
-        // Fallback to static if API 404 or fails
-        if (!loadedArtist) {
-          const staticFound = getStaticArtistBySlug(slug);
-          if (staticFound) {
-            loadedArtist = staticFound;
-          }
-        }
-
         setArtist(loadedArtist);
 
         if (loadedArtist) {
@@ -67,18 +57,16 @@ export default function ArtistDetailPage({ params }: PageProps) {
               setArtistReleases(matched);
             }
           } else {
-            setArtistReleases(getStaticReleasesByArtistId(loadedArtist.id));
+            setArtistReleases([]);
           }
         } else {
           document.title = 'Artist Not Found | CHENAB MEDIA';
+          setArtistReleases([]);
         }
       } catch (err) {
         console.warn('Error loading public artist details:', err);
-        const staticFallback = getStaticArtistBySlug(slug);
-        setArtist(staticFallback || null);
-        if (staticFallback) {
-          setArtistReleases(getStaticReleasesByArtistId(staticFallback.id));
-        }
+        setArtist(null);
+        setArtistReleases([]);
       } finally {
         setLoading(false);
       }

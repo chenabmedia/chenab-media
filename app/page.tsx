@@ -3,16 +3,17 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Play, ChevronRight } from 'lucide-react';
-import { getAllReleases } from '@/data/releases';
-import { getAllArtists } from '@/data/artists';
 import { getAllJournalPosts } from '@/data/journal';
 import { useAudio } from '@/context/AudioContext';
 import { Artist, Release } from '@/types';
+import { ReleaseCardSkeleton, ArtistCardSkeleton } from '@/components/catalog/CatalogSkeletons';
 
 export default function HomePage() {
   const { playTrack } = useAudio();
-  const [releases, setReleases] = useState<Release[]>(getAllReleases());
-  const [artists, setArtists] = useState<Artist[]>(getAllArtists());
+  const [releases, setReleases] = useState<Release[] | null>(null);
+  const [artists, setArtists] = useState<Artist[] | null>(null);
+  const [loadingReleases, setLoadingReleases] = useState<boolean>(true);
+  const [loadingArtists, setLoadingArtists] = useState<boolean>(true);
   const posts = getAllJournalPosts();
 
   useEffect(() => {
@@ -25,27 +26,32 @@ export default function HomePage() {
 
         if (relRes.ok) {
           const relData = await relRes.json();
-          if (relData.releases && relData.releases.length > 0) {
-            setReleases(relData.releases);
-          }
+          setReleases(relData.releases || []);
+        } else {
+          setReleases([]);
         }
 
         if (artRes.ok) {
           const artData = await artRes.json();
-          if (artData.artists && artData.artists.length > 0) {
-            setArtists(artData.artists);
-          }
+          setArtists(artData.artists || []);
+        } else {
+          setArtists([]);
         }
       } catch (err) {
-        console.warn('Failed to load dynamic catalog on home page, using fallback:', err);
+        console.warn('Failed to load dynamic catalog on home page:', err);
+        setReleases([]);
+        setArtists([]);
+      } finally {
+        setLoadingReleases(false);
+        setLoadingArtists(false);
       }
     }
 
     loadPublicLiveCatalog();
   }, []);
 
-  const featuredReleases = releases.slice(0, 4);
-  const featuredArtists = artists.slice(0, 4);
+  const featuredReleases = (releases || []).slice(0, 4);
+  const featuredArtists = (artists || []).slice(0, 4);
   const featuredArticle = posts[0];
 
   return (
@@ -96,15 +102,19 @@ export default function HomePage() {
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 pt-6 sm:pt-8 border-t border-[#1C1C1C] font-mono text-xs text-[#888888] w-full">
           <div className="space-y-0.5">
             <p className="text-[10px] text-[#555555] uppercase tracking-widest">ARCHIVE</p>
-            <p className="text-[#F5F5F5] font-semibold text-xs sm:text-sm truncate">CHNB-001 — CHNB-006</p>
+            <p className="text-[#F5F5F5] font-semibold text-xs sm:text-sm truncate">
+              {loadingReleases ? 'LOADING...' : `${releases?.length || 0} RELEASES`}
+            </p>
           </div>
           <div className="space-y-0.5">
-            <p className="text-[10px] text-[#555555] uppercase tracking-widest">GENRES</p>
-            <p className="text-[#F5F5F5] font-semibold text-xs sm:text-sm truncate">Drone / Ambient / Folk</p>
+            <p className="text-[10px] text-[#555555] uppercase tracking-widest">ROSTER</p>
+            <p className="text-[#F5F5F5] font-semibold text-xs sm:text-sm truncate">
+              {loadingArtists ? 'LOADING...' : `${artists?.length || 0} ARTISTS`}
+            </p>
           </div>
           <div className="space-y-0.5">
             <p className="text-[10px] text-[#555555] uppercase tracking-widest">FORMATS</p>
-            <p className="text-[#F5F5F5] font-semibold text-xs sm:text-sm truncate">180g Vinyl &bull; 24-Bit</p>
+            <p className="text-[#F5F5F5] font-semibold text-xs sm:text-sm truncate">180g Vinyl &bull; Lossless</p>
           </div>
           <div className="space-y-0.5">
             <p className="text-[10px] text-[#555555] uppercase tracking-widest">LOCATION</p>
@@ -132,66 +142,81 @@ export default function HomePage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-          {featuredReleases.map((release) => (
-            <div
-              key={release.id}
-              className="group flex flex-col justify-between border border-[#1A1A1A] bg-[#0C0C0C] p-4 hover:border-[#333333] transition-all duration-300"
-            >
-              <div>
-                <div className="relative aspect-square overflow-hidden bg-[#151515] mb-4">
-                  <img
-                    src={release.cover || release.coverImage}
-                    alt={release.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
-                  />
-                  <div className="absolute top-3 left-3 bg-[#080808]/90 backdrop-blur-md px-2 py-1 font-mono text-[10px] text-[#F5F5F5] border border-[#222222]">
-                    {release.catalogueNumber}
+        {loadingReleases ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+            <ReleaseCardSkeleton />
+            <ReleaseCardSkeleton />
+            <ReleaseCardSkeleton />
+            <ReleaseCardSkeleton />
+          </div>
+        ) : featuredReleases.length === 0 ? (
+          <div className="border border-[#1A1A1A] bg-[#0C0C0C] p-12 text-center space-y-2">
+            <p className="font-mono text-xs text-[#888888] tracking-widest uppercase">
+              NO RELEASES CURRENTLY PUBLISHED IN THE ARCHIVE
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+            {featuredReleases.map((release) => (
+              <div
+                key={release.id}
+                className="group flex flex-col justify-between border border-[#1A1A1A] bg-[#0C0C0C] p-4 hover:border-[#333333] transition-all duration-300"
+              >
+                <div>
+                  <div className="relative aspect-square overflow-hidden bg-[#151515] mb-4">
+                    <img
+                      src={release.cover || release.coverImage}
+                      alt={release.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
+                    />
+                    <div className="absolute top-3 left-3 bg-[#080808]/90 backdrop-blur-md px-2 py-1 font-mono text-[10px] text-[#F5F5F5] border border-[#222222]">
+                      {release.catalogueNumber}
+                    </div>
+                    {release.tracks && release.tracks.length > 0 && (
+                      <button
+                        onClick={() =>
+                          playTrack(
+                            release.tracks![0],
+                            release.title,
+                            release.artistName,
+                            release.cover || release.coverImage || ''
+                          )
+                        }
+                        className="absolute bottom-3 right-3 p-3 bg-[#F5F5F5] text-[#080808] rounded-full sm:opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-xl hover:scale-110 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        title="Play Preview"
+                        aria-label="Play Preview Track"
+                      >
+                        <Play size={16} fill="currentColor" />
+                      </button>
+                    )}
                   </div>
-                  {release.tracks && release.tracks.length > 0 && (
-                    <button
-                      onClick={() =>
-                        playTrack(
-                          release.tracks![0],
-                          release.title,
-                          release.artistName,
-                          release.cover || release.coverImage || ''
-                        )
-                      }
-                      className="absolute bottom-3 right-3 p-3 bg-[#F5F5F5] text-[#080808] rounded-full sm:opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-xl hover:scale-110 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                      title="Play Preview"
-                      aria-label="Play Preview Track"
-                    >
-                      <Play size={16} fill="currentColor" />
-                    </button>
-                  )}
+
+                  <div className="space-y-1">
+                    <span className="font-mono text-[11px] text-[#777777] block">
+                      {release.releaseType || release.type} &bull; {release.genre || (release.genres && release.genres[0]) || 'Music'}
+                    </span>
+                    <h3 className="font-display font-bold text-lg text-[#F5F5F5] group-hover:text-white transition-colors line-clamp-1">
+                      <Link href={`/release/${release.slug || release.id}`}>{release.title}</Link>
+                    </h3>
+                    <p className="font-sans text-xs text-[#999999] line-clamp-1">
+                      {release.artistName}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="space-y-1">
-                  <span className="font-mono text-[11px] text-[#777777] block">
-                    {release.releaseType || release.type} &bull; {release.genre || (release.genres && release.genres[0]) || 'Music'}
-                  </span>
-                  <h3 className="font-display font-bold text-lg text-[#F5F5F5] group-hover:text-white transition-colors line-clamp-1">
-                    <Link href={`/release/${release.slug || release.id}`}>{release.title}</Link>
-                  </h3>
-                  <p className="font-sans text-xs text-[#999999] line-clamp-1">
-                    {release.artistName}
-                  </p>
+                <div className="pt-4 mt-4 border-t border-[#181818] flex items-center justify-between font-mono text-[11px] text-[#666666]">
+                  <span>{release.releaseDate}</span>
+                  <Link
+                    href={`/release/${release.slug || release.id}`}
+                    className="text-[#888888] hover:text-[#F5F5F5] transition-colors py-1 min-h-[36px] inline-flex items-center"
+                  >
+                    LISTEN / ORDER &rarr;
+                  </Link>
                 </div>
               </div>
-
-              <div className="pt-4 mt-4 border-t border-[#181818] flex items-center justify-between font-mono text-[11px] text-[#666666]">
-                <span>{release.releaseDate}</span>
-                <Link
-                  href={`/release/${release.slug || release.id}`}
-                  className="text-[#888888] hover:text-[#F5F5F5] transition-colors py-1 min-h-[36px] inline-flex items-center"
-                >
-                  LISTEN / ORDER &rarr;
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Roster Showcase Section */}
@@ -214,41 +239,56 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-            {featuredArtists.map((artist) => (
-              <Link
-                key={artist.id}
-                href={`/artist/${artist.slug || artist.id}`}
-                className="group border border-[#1A1A1A] bg-[#080808] p-5 sm:p-6 hover:border-[#333333] transition-all duration-300 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="aspect-square overflow-hidden bg-[#151515] mb-5 sm:mb-6 grayscale group-hover:grayscale-0 transition-all duration-500">
-                    <img
-                      src={artist.profileImage || artist.image}
-                      alt={artist.stageName || artist.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+          {loadingArtists ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+              <ArtistCardSkeleton />
+              <ArtistCardSkeleton />
+              <ArtistCardSkeleton />
+              <ArtistCardSkeleton />
+            </div>
+          ) : featuredArtists.length === 0 ? (
+            <div className="border border-[#1A1A1A] bg-[#080808] p-12 text-center space-y-2">
+              <p className="font-mono text-xs text-[#888888] tracking-widest uppercase">
+                NO ARTISTS CURRENTLY LISTED IN THE ROSTER
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+              {featuredArtists.map((artist) => (
+                <Link
+                  key={artist.id}
+                  href={`/artist/${artist.slug || artist.id}`}
+                  className="group border border-[#1A1A1A] bg-[#080808] p-5 sm:p-6 hover:border-[#333333] transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="aspect-square overflow-hidden bg-[#151515] mb-5 sm:mb-6 grayscale group-hover:grayscale-0 transition-all duration-500">
+                      <img
+                        src={artist.profileImage || artist.image}
+                        alt={artist.stageName || artist.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    </div>
+                    <span className="font-mono text-[10px] text-[#666666] tracking-widest uppercase block">
+                      {artist.location}
+                    </span>
+                    <h3 className="font-display font-bold text-xl text-[#F5F5F5] group-hover:text-white transition-colors mt-1">
+                      {artist.stageName || artist.name}
+                    </h3>
+                    <p className="font-sans text-xs text-[#888888] line-clamp-2 mt-2 leading-relaxed">
+                      {artist.bio}
+                    </p>
                   </div>
-                  <span className="font-mono text-[10px] text-[#666666] tracking-widest uppercase block">
-                    {artist.location}
-                  </span>
-                  <h3 className="font-display font-bold text-xl text-[#F5F5F5] group-hover:text-white transition-colors mt-1">
-                    {artist.stageName || artist.name}
-                  </h3>
-                  <p className="font-sans text-xs text-[#888888] line-clamp-2 mt-2 leading-relaxed">
-                    {artist.bio}
-                  </p>
-                </div>
 
-                <div className="pt-5 mt-5 border-t border-[#181818] flex items-center justify-between font-mono text-[11px] text-[#666666]">
-                  <span>STATUS: {artist.status || 'ACTIVE'}</span>
-                  <span className="text-[#888888] group-hover:text-[#F5F5F5] transition-colors">
-                    PROFILE &rarr;
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
+                  <div className="pt-5 mt-5 border-t border-[#181818] flex items-center justify-between font-mono text-[11px] text-[#666666]">
+                    <span>STATUS: {artist.status || 'ACTIVE'}</span>
+                    <span className="text-[#888888] group-hover:text-[#F5F5F5] transition-colors">
+                      PROFILE &rarr;
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

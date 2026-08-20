@@ -1,8 +1,6 @@
 import { adminDb, getAdminDb } from './admin';
 import appletConfig from '@/firebase-applet-config.json';
 import { Artist, Release, SmartLink } from '@/types';
-import { ARTISTS } from '@/data/artists';
-import { RELEASES } from '@/data/releases';
 
 /**
  * Helper to normalize string to URL-safe slug
@@ -170,8 +168,8 @@ export async function getPublicArtists(): Promise<Artist[]> {
     console.warn('ServerCatalog: Firestore REST artists error:', err?.message || err);
   }
 
-  // Safe fallback to static data only if Firestore is completely empty or unreachable
-  return ARTISTS;
+  // Return empty array if Firestore has no artists or is unreachable (never return stale demo data)
+  return [];
 }
 
 /**
@@ -265,8 +263,8 @@ export async function getPublicReleases(): Promise<Release[]> {
     console.warn('ServerCatalog: Firestore REST releases error:', err?.message || err);
   }
 
-  // Safe fallback to static data only if Firestore has no published releases
-  return RELEASES;
+  // Return empty array if Firestore has no published releases or is unreachable (never return stale demo data)
+  return [];
 }
 
 /**

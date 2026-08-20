@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Play, Search, Grid, List, Disc, ArrowUpDown } from 'lucide-react';
-import { RELEASES } from '@/data/releases';
 import { useAudio } from '@/context/AudioContext';
 import { Release } from '@/types';
+import { ReleaseCardSkeleton, ReleaseRowSkeleton } from '@/components/catalog/CatalogSkeletons';
 
 export default function ReleasesPage() {
   const { playTrack } = useAudio();
@@ -13,7 +13,8 @@ export default function ReleasesPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortOption, setSortOption] = useState<'NEWEST' | 'OLDEST' | 'AZ'>('NEWEST');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [releasesList, setReleasesList] = useState<Release[]>(RELEASES);
+  const [releasesList, setReleasesList] = useState<Release[] | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   const releaseTypes = ['ALL', 'SINGLES', 'EPs', 'ALBUMS', 'COMPILATIONS'];
 
@@ -23,18 +24,22 @@ export default function ReleasesPage() {
         const res = await fetch('/api/releases');
         if (res.ok) {
           const json = await res.json();
-          if (json.releases && json.releases.length > 0) {
-            setReleasesList(json.releases);
-          }
+          setReleasesList(json.releases || []);
+        } else {
+          setReleasesList([]);
         }
       } catch (e) {
-        console.error('Failed to load Firestore releases, falling back to static:', e);
+        console.error('Failed to load Firestore releases:', e);
+        setReleasesList([]);
+      } finally {
+        setLoading(false);
       }
     }
     loadPublicReleases();
   }, []);
 
-  const filteredReleases = releasesList.filter((rel) => {
+  const rawReleases = releasesList || [];
+  const filteredReleases = rawReleases.filter((rel) => {
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch =
       !query ||
@@ -154,7 +159,25 @@ export default function ReleasesPage() {
         </div>
       </div>
 
-      {filteredReleases.length === 0 ? (
+      {loading ? (
+        viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            <ReleaseCardSkeleton />
+            <ReleaseCardSkeleton />
+            <ReleaseCardSkeleton />
+            <ReleaseCardSkeleton />
+            <ReleaseCardSkeleton />
+            <ReleaseCardSkeleton />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <ReleaseRowSkeleton />
+            <ReleaseRowSkeleton />
+            <ReleaseRowSkeleton />
+            <ReleaseRowSkeleton />
+          </div>
+        )
+      ) : filteredReleases.length === 0 ? (
         <div className="py-20 sm:py-24 text-center border border-dashed border-[#222222] bg-[#0C0C0C] p-6 space-y-3">
           <Disc size={32} className="mx-auto text-[#444444]" />
           <p className="font-mono text-xs text-[#888888] tracking-widest uppercase">

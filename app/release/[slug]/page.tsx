@@ -4,8 +4,6 @@ import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Play, ArrowLeft, Disc, ExternalLink, Music, Info, Sparkles, Loader2 } from 'lucide-react';
-import { getReleaseBySlug as getStaticReleaseBySlug } from '@/data/releases';
-import { getArtistById as getStaticArtistById, ARTISTS } from '@/data/artists';
 import { useAudio } from '@/context/AudioContext';
 import { Release, Artist } from '@/types';
 
@@ -42,19 +40,12 @@ export default function ReleaseDetailPage({ params }: PageProps) {
           }
         }
 
-        if (!loadedRel) {
-          const staticRel = getStaticReleaseBySlug(slug);
-          if (staticRel) {
-            loadedRel = staticRel;
-          }
-        }
-
         setRelease(loadedRel);
 
         if (loadedRel) {
           document.title = `${loadedRel.title} — ${loadedRel.artistName} | CHENAB MEDIA`;
 
-          let artistList: Artist[] = ARTISTS;
+          let artistList: Artist[] = [];
           if (artistsRes.ok) {
             const aJson = await artistsRes.json();
             if (aJson.artists && aJson.artists.length > 0) {
@@ -78,15 +69,8 @@ export default function ReleaseDetailPage({ params }: PageProps) {
         }
       } catch (e) {
         console.error('Failed to load release from API:', e);
-        const staticRel = getStaticReleaseBySlug(slug);
-        setRelease(staticRel);
-        if (staticRel) {
-          setPrimaryArtist(
-            staticRel.artistIds.length > 0
-              ? getStaticArtistById(staticRel.artistIds[0])
-              : undefined
-          );
-        }
+        setRelease(undefined);
+        setPrimaryArtist(undefined);
       } finally {
         setLoading(false);
       }

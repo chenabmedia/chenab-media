@@ -3,15 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Users, Search, ArrowUpRight, Disc } from 'lucide-react';
-import { ARTISTS } from '@/data/artists';
-import { RELEASES } from '@/data/releases';
 import { Artist, Release } from '@/types';
+import { ArtistCardSkeleton } from '@/components/catalog/CatalogSkeletons';
 
 export default function ArtistsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [artistsList, setArtistsList] = useState<Artist[]>(ARTISTS);
-  const [releasesList, setReleasesList] = useState<Release[]>(RELEASES);
+  const [artistsList, setArtistsList] = useState<Artist[] | null>(null);
+  const [releasesList, setReleasesList] = useState<Release[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     async function loadPublicArtistsAndReleases() {
@@ -23,26 +23,31 @@ export default function ArtistsPage() {
 
         if (artistsRes.ok) {
           const aData = await artistsRes.json();
-          if (aData.artists && aData.artists.length > 0) {
-            setArtistsList(aData.artists);
-          }
+          setArtistsList(aData.artists || []);
+        } else {
+          setArtistsList([]);
         }
 
         if (releasesRes.ok) {
           const rData = await releasesRes.json();
-          if (rData.releases && rData.releases.length > 0) {
-            setReleasesList(rData.releases);
-          }
+          setReleasesList(rData.releases || []);
+        } else {
+          setReleasesList([]);
         }
       } catch (err) {
-        console.warn('Failed to fetch public catalog, using fallback:', err);
+        console.warn('Failed to fetch public catalog:', err);
+        setArtistsList([]);
+        setReleasesList([]);
+      } finally {
+        setLoading(false);
       }
     }
 
     loadPublicArtistsAndReleases();
   }, []);
 
-  const filteredArtists = artistsList.filter((artist) => {
+  const rawArtists = artistsList || [];
+  const filteredArtists = rawArtists.filter((artist) => {
     const query = searchQuery.toLowerCase().trim();
     const artistName = (artist.stageName || artist.name || '').toLowerCase();
     const artistLocation = (artist.location || '').toLowerCase();
@@ -106,7 +111,16 @@ export default function ArtistsPage() {
         </div>
       </div>
 
-      {filteredArtists.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+          <ArtistCardSkeleton />
+          <ArtistCardSkeleton />
+          <ArtistCardSkeleton />
+          <ArtistCardSkeleton />
+          <ArtistCardSkeleton />
+          <ArtistCardSkeleton />
+        </div>
+      ) : filteredArtists.length === 0 ? (
         <div className="py-20 sm:py-24 text-center border border-dashed border-[#222222] bg-[#0C0C0C] p-6 space-y-3">
           <Users size={32} className="mx-auto text-[#444444]" />
           <p className="font-mono text-xs text-[#888888] tracking-widest uppercase">

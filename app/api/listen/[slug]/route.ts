@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, getAdminDb } from '@/lib/firebase/admin';
 import { getPublicReleaseBySlug } from '@/lib/firebase/serverCatalog';
-import { getReleaseBySlug, RELEASES } from '@/data/releases';
 import { SmartLink, Release } from '@/types';
 
 export async function GET(
@@ -54,25 +53,6 @@ export async function GET(
           artistName: foundRel.artistName,
           artwork: foundRel.coverImage || foundRel.cover || '',
           dspLinks: foundRel.dspLinks || foundRel.streamingLinks || {},
-          status: 'ACTIVE',
-        };
-      }
-    }
-
-    // 3. Fallback to static releases if not found in Firestore
-    if (!smartLink || !release) {
-      const staticRel = getReleaseBySlug(slug) || RELEASES.find((r) => r.slug === slug);
-      if (staticRel) {
-        release = staticRel;
-        smartLink = {
-          id: `sm-${staticRel.id}`,
-          releaseId: staticRel.id,
-          slug: staticRel.slug,
-          title: staticRel.title,
-          artistIds: staticRel.artistIds,
-          artistName: staticRel.artistName,
-          artwork: staticRel.cover || '',
-          dspLinks: staticRel.streamingLinks || {},
           status: 'ACTIVE',
         };
       }

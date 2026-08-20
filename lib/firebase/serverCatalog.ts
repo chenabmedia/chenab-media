@@ -69,13 +69,13 @@ export function normalizeArtist(raw: any, docId: string): Artist {
   const image = raw.profileImage || raw.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80';
 
   return {
-    ...raw,
     id: docId, // Canonical ID rule
     name: stageName,
     stageName: stageName,
     slug: slug,
     image: image,
     profileImage: image,
+    coverImage: raw.coverImage || raw.cover || '',
     bio: raw.bio || '',
     location: raw.location || 'Jammu & Kashmir',
     genres: Array.isArray(raw.genres) ? raw.genres : (raw.genres ? [raw.genres] : ['Electronic', 'Ambient']),
@@ -84,6 +84,7 @@ export function normalizeArtist(raw: any, docId: string): Artist {
     streamingLinks: raw.streamingLinks || raw.dspLinks || {},
     releaseIds: Array.isArray(raw.releaseIds) ? raw.releaseIds : [],
     featuredQuote: raw.featuredQuote || '',
+    joinedAt: raw.joinedAt || raw.createdAt || '',
   };
 }
 

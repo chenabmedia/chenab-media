@@ -18,6 +18,7 @@ import { Release } from '@/types';
 import { RELEASES } from '@/data/releases';
 import { useAudio } from '@/context/AudioContext';
 import { useAuth } from '@/context/AuthContext';
+import { ArtistPortalLayout } from '@/components/artist/ArtistPortalLayout';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -85,29 +86,32 @@ export default function ArtistReleaseDetailPage({ params }: PageProps) {
 
   if (!release) {
     return (
-      <div className="py-20 text-center font-mono space-y-6">
-        <div className="w-16 h-16 mx-auto rounded-full bg-[#111111] border border-[#222222] flex items-center justify-center text-[#888888]">
-          <Disc size={28} />
+      <ArtistPortalLayout>
+        <div className="py-20 text-center font-mono space-y-6">
+          <div className="w-16 h-16 mx-auto rounded-full bg-[#111111] border border-[#222222] flex items-center justify-center text-[#888888]">
+            <Disc size={28} />
+          </div>
+          <h2 className="font-display font-bold text-2xl text-[#F5F5F5] uppercase">
+            RELEASE NOT FOUND
+          </h2>
+          <p className="text-xs text-[#888888]">
+            THE REQUESTED CATALOGUE RELEASE ENTRY DOES NOT EXIST OR IS NOT ASSIGNED TO THIS ARTIST PROFILE.
+          </p>
+          <Link
+            href="/artist/releases"
+            className="inline-block px-6 py-3 bg-[#F5F5F5] text-[#080808] font-bold text-xs uppercase"
+          >
+            RETURN TO DISCOGRAPHY
+          </Link>
         </div>
-        <h2 className="font-display font-bold text-2xl text-[#F5F5F5] uppercase">
-          RELEASE NOT FOUND
-        </h2>
-        <p className="text-xs text-[#888888]">
-          THE REQUESTED CATALOGUE RELEASE ENTRY DOES NOT EXIST OR IS NOT ASSIGNED TO THIS ARTIST PROFILE.
-        </p>
-        <Link
-          href="/artist/releases"
-          className="inline-block px-6 py-3 bg-[#F5F5F5] text-[#080808] font-bold text-xs uppercase"
-        >
-          RETURN TO DISCOGRAPHY
-        </Link>
-      </div>
+      </ArtistPortalLayout>
     );
   }
 
   return (
-    <div className="space-y-10 font-mono">
-      {/* Top Bar */}
+    <ArtistPortalLayout>
+      <div className="space-y-10 font-mono">
+        {/* Top Bar */}
       <div className="border-b border-[#1C1C1C] pb-6 flex items-center justify-between">
         <Link
           href="/artist/releases"
@@ -251,5 +255,6 @@ export default function ArtistReleaseDetailPage({ params }: PageProps) {
         </div>
       </div>
     </div>
+    </ArtistPortalLayout>
   );
 }

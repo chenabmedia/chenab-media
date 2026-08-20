@@ -12,6 +12,7 @@ import {
 import Link from 'next/link';
 import { Notification } from '@/types';
 import { useAuth } from '@/context/AuthContext';
+import { ArtistPortalLayout } from '@/components/artist/ArtistPortalLayout';
 
 export default function ArtistNotificationsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -86,8 +87,9 @@ export default function ArtistNotificationsPage() {
   }
 
   return (
-    <div className="space-y-8 font-mono">
-      {/* Page Header */}
+    <ArtistPortalLayout>
+      <div className="space-y-8 font-mono">
+        {/* Page Header */}
       <div className="border-b border-[#1C1C1C] pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs text-emerald-400 mb-1">
@@ -198,5 +200,6 @@ export default function ArtistNotificationsPage() {
         </div>
       )}
     </div>
+    </ArtistPortalLayout>
   );
 }

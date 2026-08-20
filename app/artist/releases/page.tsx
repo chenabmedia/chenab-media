@@ -14,6 +14,7 @@ import {
 import { Release } from '@/types';
 import { useAudio } from '@/context/AudioContext';
 import { useAuth } from '@/context/AuthContext';
+import { ArtistPortalLayout } from '@/components/artist/ArtistPortalLayout';
 
 export default function ArtistReleasesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -74,8 +75,9 @@ export default function ArtistReleasesPage() {
   }
 
   return (
-    <div className="space-y-8 font-mono">
-      {/* Header */}
+    <ArtistPortalLayout>
+      <div className="space-y-8 font-mono">
+        {/* Header */}
       <div className="border-b border-[#1C1C1C] pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs text-sky-400 mb-1">
@@ -196,5 +198,6 @@ export default function ArtistReleasesPage() {
         </div>
       )}
     </div>
+    </ArtistPortalLayout>
   );
 }

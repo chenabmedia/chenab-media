@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { ArtistPortalLayout } from '@/components/artist/ArtistPortalLayout';
 import {
   Music2,
   Disc,
@@ -88,8 +89,9 @@ export default function ArtistDashboardPage() {
   const stageName = artist?.stageName || artist?.name || userProfile?.displayName || 'ROSTER ARTIST';
 
   return (
-    <div className="space-y-10 font-mono">
-      {/* Header Banner */}
+    <ArtistPortalLayout>
+      <div className="space-y-10 font-mono">
+        {/* Header Banner */}
       <div className="border border-[#1C1C1C] bg-[#0A0A0A] p-6 sm:p-8 space-y-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-sky-950/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -311,5 +313,6 @@ export default function ArtistDashboardPage() {
         </div>
       </div>
     </div>
+    </ArtistPortalLayout>
   );
 }

@@ -24,6 +24,13 @@ export interface SocialLinks {
   youtube?: string;
   soundcloud?: string;
   twitter?: string;
+  x?: string;
+  tiktok?: string;
+  facebook?: string;
+  threads?: string;
+  snapchat?: string;
+  website?: string;
+  [key: string]: string | undefined;
 }
 
 export interface Track {

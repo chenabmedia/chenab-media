@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { ArtistPortalLayout } from '@/components/artist/ArtistPortalLayout';
 import {
   User,
   Shield,
@@ -167,8 +168,9 @@ export default function ArtistProfilePage() {
   }
 
   return (
-    <div className="space-y-10 font-mono">
-      {/* Page Header */}
+    <ArtistPortalLayout>
+      <div className="space-y-10 font-mono">
+        {/* Page Header */}
       <div className="border-b border-[#1C1C1C] pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs text-sky-400 mb-1">
@@ -448,5 +450,6 @@ export default function ArtistProfilePage() {
         </div>
       </form>
     </div>
+    </ArtistPortalLayout>
   );
 }

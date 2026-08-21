@@ -281,36 +281,52 @@ export default function ReleaseDetailPage({ params }: PageProps) {
 
               <div className="divide-y divide-[#181818] border border-[#1C1C1C] bg-[#0C0C0C]">
                 {tracks.map((track, idx) => {
-                  const isCurrent = currentTrack?.track?.id === track.id;
+                  const isCurrent =
+                    currentTrack?.track?.id === track.id ||
+                    (currentTrack?.track?.title === track.title &&
+                      currentTrack?.releaseTitle === release.title);
+                  const hasPreview = Boolean(track.audioPreviewUrl && track.audioPreviewUrl.trim().length > 0);
+
                   return (
                     <div
                       key={track.id || idx}
                       className="p-3.5 sm:p-4 flex items-center justify-between gap-4 hover:bg-[#111111] transition-colors group"
                     >
                       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                        <button
-                          onClick={() =>
-                            playTrack(
-                              track,
-                              release.title,
-                              release.artistName,
-                              release.cover || release.coverImage || ''
-                            )
-                          }
-                          className="w-8 h-8 rounded-full border border-[#333333] flex items-center justify-center text-[#888888] group-hover:border-[#666666] group-hover:text-[#F5F5F5] transition-colors shrink-0"
-                          title="Play Track"
-                          aria-label={`Play track ${track.title}`}
-                        >
-                          {isCurrent && isPlaying ? (
-                            <div className="flex items-end gap-0.5 h-3">
-                              <span className="w-0.5 h-3 bg-[#F5F5F5] animate-pulse" />
-                              <span className="w-0.5 h-2 bg-[#F5F5F5] animate-pulse delay-75" />
-                              <span className="w-0.5 h-3 bg-[#F5F5F5] animate-pulse delay-150" />
-                            </div>
-                          ) : (
-                            <Play size={12} fill="currentColor" />
-                          )}
-                        </button>
+                        {hasPreview ? (
+                          <button
+                            id={`play-track-${track.id || idx}`}
+                            onClick={() =>
+                              playTrack(
+                                track,
+                                release.title,
+                                release.artistName,
+                                release.cover || release.coverImage || ''
+                              )
+                            }
+                            className="w-8 h-8 rounded-full border border-[#333333] flex items-center justify-center text-[#888888] group-hover:border-[#666666] group-hover:text-[#F5F5F5] transition-colors shrink-0 focus-visible:ring-1 focus-visible:ring-white"
+                            title={isCurrent && isPlaying ? 'Pause audio preview' : 'Play audio preview'}
+                            aria-label={`${isCurrent && isPlaying ? 'Pause' : 'Play'} preview for ${track.title}`}
+                          >
+                            {isCurrent && isPlaying ? (
+                              <div className="flex items-end gap-0.5 h-3">
+                                <span className="w-0.5 h-3 bg-[#F5F5F5] animate-pulse" />
+                                <span className="w-0.5 h-2 bg-[#F5F5F5] animate-pulse delay-75" />
+                                <span className="w-0.5 h-3 bg-[#F5F5F5] animate-pulse delay-150" />
+                              </div>
+                            ) : (
+                              <Play size={12} fill="currentColor" className="ml-0.5" />
+                            )}
+                          </button>
+                        ) : (
+                          <div
+                            className="w-8 h-8 rounded-full border border-[#222222] bg-[#141414] flex items-center justify-center text-[#444444] shrink-0"
+                            title="Audio preview unavailable for this track"
+                            aria-label="Audio preview unavailable"
+                          >
+                            <Music size={12} />
+                          </div>
+                        )}
                         <div className="font-mono text-xs text-[#666666] w-6 shrink-0">
                           {String(track.number || idx + 1).padStart(2, '0')}
                         </div>
@@ -326,8 +342,15 @@ export default function ReleaseDetailPage({ params }: PageProps) {
                         </div>
                       </div>
 
-                      <div className="font-mono text-xs text-[#666666] shrink-0">
-                        {track.duration || '--:--'}
+                      <div className="flex items-center gap-3 shrink-0">
+                        {!hasPreview && (
+                          <span className="font-mono text-[9px] text-[#666666] uppercase tracking-wider hidden sm:inline-block px-1.5 py-0.5 border border-[#222222] bg-[#141414]">
+                            DSP ONLY
+                          </span>
+                        )}
+                        <div className="font-mono text-xs text-[#666666]">
+                          {track.duration || '--:--'}
+                        </div>
                       </div>
                     </div>
                   );

@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ExternalLink,
   Play,
+  Pause,
   Disc,
   MapPin,
   Share2,
@@ -191,7 +192,7 @@ export default function ArtistDetailPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const slug = resolvedParams.slug;
   const router = useRouter();
-  const { playTrack } = useAudio();
+  const { playTrack, currentTrack, isPlaying } = useAudio();
 
   const [artist, setArtist] = useState<Artist | null | undefined>(undefined);
   const [artistReleases, setArtistReleases] = useState<Release[]>([]);
@@ -589,22 +590,46 @@ export default function ArtistDetailPage({ params }: PageProps) {
                       <span>LISTEN / DETAILS</span>
                     </Link>
 
-                    {latestRelease.tracks && latestRelease.tracks.length > 0 && (
-                      <button
-                        onClick={() =>
-                          playTrack(
-                            latestRelease.tracks![0],
-                            latestRelease.title,
-                            latestRelease.artistName || stageName,
-                            latestRelease.cover || latestRelease.coverImage || ''
-                          )
-                        }
-                        className="px-4 py-2.5 min-h-[44px] rounded-xl border border-[#2C2C2C] bg-[#141414] hover:bg-[#1E1E1E] text-white font-mono text-xs font-semibold uppercase tracking-wider transition-colors flex items-center gap-1.5"
-                      >
-                        <Play size={13} fill="currentColor" />
-                        <span>PREVIEW</span>
-                      </button>
-                    )}
+                    {latestRelease.tracks &&
+                      latestRelease.tracks.length > 0 &&
+                      Boolean(latestRelease.tracks[0]?.audioPreviewUrl) && (
+                        (() => {
+                          const firstTrack = latestRelease.tracks[0];
+                          const isCurrentActive =
+                            (currentTrack?.track?.id && currentTrack.track.id === firstTrack.id) ||
+                            (currentTrack?.track?.title === firstTrack.title &&
+                              currentTrack?.releaseTitle === latestRelease.title);
+                          const isPlayingThis = isCurrentActive && isPlaying;
+
+                          return (
+                            <button
+                              id="artist-latest-release-preview-btn"
+                              onClick={() =>
+                                playTrack(
+                                  firstTrack,
+                                  latestRelease.title,
+                                  latestRelease.artistName || stageName,
+                                  latestRelease.cover || latestRelease.coverImage || ''
+                                )
+                              }
+                              aria-label={`${isPlayingThis ? 'Pause' : 'Play'} audio preview for ${firstTrack.title}`}
+                              className="px-4 py-2.5 min-h-[44px] rounded-xl border border-[#2C2C2C] bg-[#141414] hover:bg-[#1E1E1E] text-white font-mono text-xs font-semibold uppercase tracking-wider transition-colors flex items-center gap-1.5 focus-visible:ring-1 focus-visible:ring-white"
+                            >
+                              {isPlayingThis ? (
+                                <>
+                                  <Pause size={13} />
+                                  <span>PAUSE</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Play size={13} fill="currentColor" />
+                                  <span>PREVIEW</span>
+                                </>
+                              )}
+                            </button>
+                          );
+                        })()
+                      )}
 
                     {latestRelease.smartLink?.slug && (
                       <Link

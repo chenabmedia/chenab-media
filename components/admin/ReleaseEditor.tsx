@@ -114,6 +114,19 @@ export function ReleaseEditor({ initialRelease, isEditMode = false }: ReleaseEdi
     initialRelease?.smartLink?.slug || initialRelease?.slug || ''
   );
 
+  // Odesli DSP Detection State
+  const [scanSeedUrl, setScanSeedUrl] = useState<string>('');
+  const [isDetectingDSP, setIsDetectingDSP] = useState<boolean>(false);
+  const [detectionResult, setDetectionResult] = useState<{
+    detectedLinks: DSPLinks;
+    matchedStores: Array<{ key: keyof DSPLinks; name: string; url: string }>;
+    pageUrl?: string;
+    title?: string;
+    artistName?: string;
+  } | null>(null);
+  const [detectionError, setDetectionError] = useState<string | null>(null);
+  const [selectedToApply, setSelectedToApply] = useState<Record<string, boolean>>({});
+
   // Aux state
   const [artists, setArtists] = useState<Artist[]>([]);
   const [activeTab, setActiveTab] = useState<'basic' | 'artwork' | 'tracks' | 'credits' | 'dsp'>(
@@ -305,7 +318,117 @@ export function ReleaseEditor({ initialRelease, isEditMode = false }: ReleaseEdi
     setSubgenres(subgenres.filter((s) => s !== tag));
   };
 
-  // Trigger DSP Discovery
+  // Trigger DSP Discovery via Odesli
+  const handleDetectStreamingLinks = async () => {
+    const seed =
+      scanSeedUrl.trim() ||
+      dspLinks.spotify ||
+      dspLinks.appleMusic ||
+      dspLinks.youtube ||
+      dspLinks.youtubeMusic ||
+      '';
+
+    if (!seed) {
+      const msg = 'Enter a valid Spotify, Apple Music, YouTube, or other supported DSP URL.';
+      setDetectionError(msg);
+      showToast(msg, 'error');
+      return;
+    }
+
+    setIsDetectingDSP(true);
+    setDetectionError(null);
+    setDetectionResult(null);
+
+    try {
+      let token = '';
+      if (user) {
+        token = await user.getIdToken();
+      }
+
+      const targetId = id || 'draft';
+      const res = await fetch(`/api/admin/releases/${targetId}/detect-links`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ scanSource: seed }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to detect streaming links.');
+      }
+
+      setDetectionResult({
+        detectedLinks: json.detectedLinks || {},
+        matchedStores: json.matchedStores || [],
+        pageUrl: json.pageUrl,
+        title: json.title,
+        artistName: json.artistName,
+      });
+
+      // Compute initial checkboxes: 'NEW LINK' checked by default, others unchecked
+      const initialSelection: Record<string, boolean> = {};
+      const platforms = [
+        'spotify',
+        'appleMusic',
+        'youtubeMusic',
+        'youtube',
+        'amazonMusic',
+        'deezer',
+        'tidal',
+        'soundcloud',
+        'bandcamp',
+        'other',
+      ];
+
+      for (const p of platforms) {
+        const currentVal = (dspLinks as any)[p]?.trim() || '';
+        const detectedVal = (json.detectedLinks as any)[p]?.trim() || '';
+        if (!currentVal && detectedVal) {
+          initialSelection[p] = true; // NEW LINK
+        } else {
+          initialSelection[p] = false; // MATCH, CONFLICT, or NOT FOUND
+        }
+      }
+
+      setSelectedToApply(initialSelection);
+      showToast(`Detected ${json.matchedStores?.length || 0} streaming platform links!`, 'success');
+    } catch (err: any) {
+      const msg = err.message || 'Streaming link detection is temporarily unavailable.';
+      setDetectionError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setIsDetectingDSP(false);
+    }
+  };
+
+  const handleApplyDetectedLinks = () => {
+    if (!detectionResult) return;
+
+    const updated = { ...dspLinks };
+    let count = 0;
+
+    for (const [key, isChecked] of Object.entries(selectedToApply)) {
+      if (isChecked && (detectionResult.detectedLinks as any)[key]) {
+        (updated as any)[key] = (detectionResult.detectedLinks as any)[key];
+        count++;
+      }
+    }
+
+    setDspLinks(updated);
+    showToast(`Applied ${count} detected streaming link${count === 1 ? '' : 's'} to form state.`, 'success');
+  };
+
+  const toggleApplyLink = (key: string) => {
+    setSelectedToApply((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  // Trigger Legacy DSP Discovery fallback
   const handleAutoDiscoverDSP = async () => {
     const res = await dspDiscoveryService.discoverLinks({ title, artistName });
     setDspMessage(res.message || 'Automatic DSP discovery is not configured.');
@@ -1138,31 +1261,227 @@ export function ReleaseEditor({ initialRelease, isEditMode = false }: ReleaseEdi
       {/* TAB 5: DSP LINKS & SMART LINK */}
       {activeTab === 'dsp' && (
         <div className="bg-[#0C0C0C] border border-[#1C1C1C] p-6 space-y-8">
-          {/* Automatic DSP Discovery Bar */}
-          <div className="bg-[#111111] border border-[#222222] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 font-mono text-xs text-[#F5F5F5] font-bold uppercase">
-                <Sparkles size={14} className="text-amber-400" />
-                <span>AUTOMATED DSP LINK DISCOVERY ENGINE</span>
+          {/* Odesli Automated DSP Discovery Bar */}
+          <div className="bg-[#111111] border border-[#222222] p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 font-mono text-xs text-[#F5F5F5] font-bold uppercase tracking-wider">
+                  <Sparkles size={14} className="text-amber-400" />
+                  <span>DETECT STREAMING LINKS</span>
+                </div>
+                <p className="font-sans text-xs text-[#888888]">
+                  Enter a seed streaming link to automatically discover and map direct URLs across all major DSPs.
+                </p>
               </div>
-              <p className="font-sans text-xs text-[#888888]">
-                Attempts automatic API resolution across global streaming services by ISRC or Title.
-              </p>
             </div>
-            <button
-              type="button"
-              onClick={handleAutoDiscoverDSP}
-              className="px-4 py-2 bg-[#1F1F1F] border border-[#333333] hover:border-[#666666] text-[#F5F5F5] font-mono text-xs uppercase flex items-center gap-2 shrink-0"
-            >
-              <Sparkles size={12} className="text-amber-400" />
-              <span>RUN AUTOMATED DISCOVERY</span>
-            </button>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <input
+                type="url"
+                value={scanSeedUrl}
+                onChange={(e) => {
+                  setScanSeedUrl(e.target.value);
+                  if (detectionError) setDetectionError(null);
+                }}
+                placeholder="Spotify / Apple Music / YouTube URL"
+                disabled={isDetectingDSP}
+                className="flex-1 bg-[#161616] border border-[#2A2A2A] px-4 py-2.5 font-mono text-xs text-[#F5F5F5] placeholder-[#555555] focus:outline-none focus:border-[#555555] disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={handleDetectStreamingLinks}
+                disabled={isDetectingDSP}
+                aria-busy={isDetectingDSP}
+                className="px-5 py-2.5 bg-[#F5F5F5] hover:bg-white text-[#080808] font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shrink-0 transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {isDetectingDSP ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin text-[#080808]" />
+                    <span>Detecting streaming links...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={13} className="text-amber-600" />
+                    <span>DETECT STREAMING LINKS</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {detectionError && (
+              <div className="bg-red-950/30 border border-red-900/50 p-3 font-mono text-xs text-red-400 flex items-center gap-2.5">
+                <AlertCircle size={15} className="shrink-0 text-red-400" />
+                <span>{detectionError}</span>
+              </div>
+            )}
           </div>
 
-          {dspMessage && (
-            <div className="bg-amber-950/20 border border-amber-900/40 p-3 font-mono text-xs text-amber-300 flex items-center gap-2">
-              <Info size={14} />
-              <span>{dspMessage}</span>
+          {/* Odesli Result Review Comparison Table */}
+          {detectionResult && (
+            <div className="bg-[#101010] border border-[#262626] p-5 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#222222] pb-4">
+                <div>
+                  <div className="flex items-center gap-2 font-mono text-xs font-bold text-[#F5F5F5] uppercase tracking-wide">
+                    <CheckCircle2 size={14} className="text-emerald-400" />
+                    <span>DETECTED STREAMING LINKS REVIEW</span>
+                    <span className="ml-2 px-2 py-0.5 bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 font-mono text-[10px]">
+                      {detectionResult.matchedStores?.length || 0} MATCHES FOUND
+                    </span>
+                  </div>
+                  {(detectionResult.title || detectionResult.artistName) && (
+                    <p className="font-mono text-xs text-[#888888] mt-1">
+                      Target:{' '}
+                      <span className="text-[#CCCCCC]">
+                        {detectionResult.title || title}
+                      </span>
+                      {detectionResult.artistName && ` — ${detectionResult.artistName}`}
+                    </p>
+                  )}
+                </div>
+
+                {detectionResult.pageUrl && (
+                  <div className="flex items-center gap-2 font-mono text-xs">
+                    <a
+                      href={detectionResult.pageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-[#181818] border border-[#333333] hover:border-[#555555] text-[#CCCCCC] flex items-center gap-1.5 transition-colors"
+                    >
+                      <ExternalLink size={12} className="text-[#888888]" />
+                      <span>UNIVERSAL LINK</span>
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Comparison Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left font-mono text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#222222] text-[#777777] uppercase text-[11px]">
+                      <th className="py-2.5 px-3 font-semibold">Platform</th>
+                      <th className="py-2.5 px-3 font-semibold">Current URL</th>
+                      <th className="py-2.5 px-3 font-semibold">Detected URL</th>
+                      <th className="py-2.5 px-3 font-semibold text-center">Status</th>
+                      <th className="py-2.5 px-3 font-semibold text-center">Apply</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#1A1A1A]">
+                    {[
+                      { key: 'spotify', label: 'Spotify' },
+                      { key: 'appleMusic', label: 'Apple Music' },
+                      { key: 'youtubeMusic', label: 'YouTube Music' },
+                      { key: 'youtube', label: 'YouTube Video' },
+                      { key: 'amazonMusic', label: 'Amazon Music' },
+                      { key: 'deezer', label: 'Deezer' },
+                      { key: 'tidal', label: 'TIDAL' },
+                      { key: 'soundcloud', label: 'SoundCloud' },
+                      { key: 'bandcamp', label: 'Bandcamp' },
+                      { key: 'other', label: 'Other Stores' },
+                    ].map((platform) => {
+                      const currentVal = ((dspLinks as any)[platform.key] || '').trim();
+                      const detectedVal = ((detectionResult.detectedLinks as any)[platform.key] || '').trim();
+
+                      let status: 'MATCH' | 'NEW LINK' | 'CONFLICT' | 'NOT FOUND' = 'NOT FOUND';
+                      if (!detectedVal) {
+                        status = 'NOT FOUND';
+                      } else if (currentVal && currentVal === detectedVal) {
+                        status = 'MATCH';
+                      } else if (currentVal && currentVal !== detectedVal) {
+                        status = 'CONFLICT';
+                      } else if (!currentVal && detectedVal) {
+                        status = 'NEW LINK';
+                      }
+
+                      const isChecked = !!selectedToApply[platform.key];
+                      const isDisabled = status === 'NOT FOUND';
+
+                      return (
+                        <tr
+                          key={platform.key}
+                          className="hover:bg-[#141414] transition-colors"
+                        >
+                          <td className="py-3 px-3 font-bold text-[#E5E5E5] whitespace-nowrap">
+                            {platform.label}
+                          </td>
+                          <td className="py-3 px-3 text-[#888888] max-w-[180px] sm:max-w-[240px] truncate">
+                            {currentVal ? (
+                              <span className="text-[#AAAAAA]" title={currentVal}>
+                                {currentVal}
+                              </span>
+                            ) : (
+                              <span className="text-[#444444] italic">— None —</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 max-w-[220px] sm:max-w-[300px] truncate">
+                            {detectedVal ? (
+                              <a
+                                href={detectedVal}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={detectedVal}
+                                className="text-blue-400 hover:text-blue-300 underline flex items-center gap-1 inline-block truncate"
+                              >
+                                {detectedVal}
+                              </a>
+                            ) : (
+                              <span className="text-[#444444] italic">— Not returned —</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            {status === 'MATCH' && (
+                              <span className="px-2 py-0.5 bg-[#1F1F1F] border border-[#333333] text-[#888888] text-[10px] font-bold">
+                                MATCH
+                              </span>
+                            )}
+                            {status === 'NEW LINK' && (
+                              <span className="px-2 py-0.5 bg-emerald-950/60 border border-emerald-800/60 text-emerald-400 text-[10px] font-bold">
+                                NEW LINK
+                              </span>
+                            )}
+                            {status === 'CONFLICT' && (
+                              <span className="px-2 py-0.5 bg-amber-950/60 border border-amber-800/60 text-amber-300 text-[10px] font-bold">
+                                CONFLICT
+                              </span>
+                            )}
+                            {status === 'NOT FOUND' && (
+                              <span className="px-2 py-0.5 text-[#555555] text-[10px]">
+                                NOT FOUND
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              disabled={isDisabled}
+                              onChange={() => toggleApplyLink(platform.key)}
+                              className="w-4 h-4 accent-[#F5F5F5] cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Action Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[#222222]">
+                <p className="font-sans text-xs text-[#777777]">
+                  Applying updates the local form state only. Click{' '}
+                  <strong className="text-[#CCCCCC]">SAVE DRAFT</strong> or{' '}
+                  <strong className="text-[#CCCCCC]">PUBLISH</strong> above to commit to the database.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleApplyDetectedLinks}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shrink-0 transition-colors"
+                >
+                  <Check size={14} />
+                  <span>APPLY DETECTED LINKS</span>
+                </button>
+              </div>
             </div>
           )}
 

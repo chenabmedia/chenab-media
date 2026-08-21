@@ -85,10 +85,10 @@ export interface EmailLog {
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
   siteName: "CHENAB MEDIA",
-  siteDescription: "An independent record label, artist collective, and creative platform dedicated to sonic experimentation, high-altitude drone acoustics, and uncompromised creative autonomy.",
-  defaultSeoTitle: "CHENAB MEDIA — Independent Record Label & Artist Collective",
-  defaultSeoDescription: "Explore experimental releases, ambient soundscapes, and roster artists from Chenab Media.",
-  ogImage: "",
+  siteDescription: "CHENAB Media is an independent label by the artist, for the artist, based in Jammu & Kashmir, India.",
+  defaultSeoTitle: "CHENAB MEDIA — Independent Label from Jammu & Kashmir",
+  defaultSeoDescription: "CHENAB Media is an independent label by the artist, for the artist, based in Jammu & Kashmir, India.",
+  ogImage: "https://chenabmedia.in/og-image.png",
   copyrightText: "© 2026 CHENAB MEDIA. ALL RIGHTS RESERVED.",
   navigation: [
     { id: 'releases', label: 'Catalogue', href: '/releases', enabled: true, order: 1 },
@@ -122,7 +122,7 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
   },
   textCms: {},
   footer: {
-    description: "An independent record label, artist collective, and creative platform dedicated to sonic experimentation, high-altitude drone acoustics, and uncompromised creative autonomy.",
+    description: "CHENAB Media is an independent label by the artist, for the artist, based in Jammu & Kashmir, India.",
     copyright: "© 2026 CHENAB MEDIA. ALL RIGHTS RESERVED.",
     socialLinks: {
       instagram: "https://instagram.com",

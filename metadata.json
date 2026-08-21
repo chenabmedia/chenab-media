@@ -1,6 +1,6 @@
 {
   "name": "CHENAB MEDIA",
-  "description": "CHENAB MEDIA — Independent Music Label & Creative Platform",
+  "description": "CHENAB Media is an independent label by the artist, for the artist, based in Jammu & Kashmir, India.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

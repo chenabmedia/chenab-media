@@ -45,12 +45,38 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://chenabmedia.in'),
   title: {
-    default: 'CHENAB Media',
-    template: '%s | CHENAB Media',
+    default: 'CHENAB MEDIA — Independent Label from Jammu & Kashmir',
+    template: '%s | CHENAB MEDIA',
   },
-  applicationName: 'CHENAB Media',
-  description: 'An independent record label, artist collective, and creative platform dedicated to sonic experimentation, high-altitude drone acoustics, and uncompromised creative autonomy.',
+  applicationName: 'CHENAB MEDIA',
+  description: 'CHENAB Media is an independent label by the artist, for the artist, based in Jammu & Kashmir, India.',
+  openGraph: {
+    title: 'CHENAB MEDIA — Independent Label from Jammu & Kashmir',
+    description: 'CHENAB Media is an independent label by the artist, for the artist, based in Jammu & Kashmir, India.',
+    url: 'https://chenabmedia.in/',
+    type: 'website',
+    siteName: 'CHENAB MEDIA',
+    locale: 'en_US',
+    images: [
+      {
+        url: 'https://chenabmedia.in/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'CHENAB MEDIA — Independent Label from Jammu & Kashmir',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'CHENAB MEDIA — Independent Label from Jammu & Kashmir',
+    description: 'CHENAB Media is an independent label by the artist, for the artist, based in Jammu & Kashmir, India.',
+    images: ['https://chenabmedia.in/og-image.png'],
+  },
+  alternates: {
+    canonical: 'https://chenabmedia.in/',
+  },
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },

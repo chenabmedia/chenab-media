@@ -9,6 +9,7 @@ import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { AudioPlayerDrawer } from '@/components/AudioPlayerDrawer';
 import { NavigationProgressBar } from '@/components/NavigationProgressBar';
+import { Analytics } from '@vercel/analytics/next';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -117,6 +118,7 @@ export default function RootLayout({
             </ToastProvider>
           </AudioProvider>
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );

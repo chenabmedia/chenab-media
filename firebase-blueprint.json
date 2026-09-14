@@ -1,0 +1,246 @@
+{
+  "entities": {
+    "user": {
+      "title": "User Profile",
+      "description": "User account and role profile in CHENAB Media",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "executive", "artist"] },
+        "artistId": { "type": "string", "description": "Linked artist profile ID" },
+        "status": { "type": "string", "enum": ["ACTIVE", "PENDING", "SUSPENDED", "DISABLED"] },
+        "permissions": { "type": "array" },
+        "lastLoginAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "status", "createdAt", "updatedAt"]
+    },
+    "auditLog": {
+      "title": "Audit Log",
+      "description": "System security and administrative audit event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "actorUid": { "type": "string" },
+        "actorName": { "type": "string" },
+        "actorEmail": { "type": "string", "format": "email" },
+        "action": { "type": "string" },
+        "targetType": { "type": "string" },
+        "targetId": { "type": "string" },
+        "description": { "type": "string" },
+        "metadata": { "type": "object" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "ipAddress": { "type": "string" },
+        "userAgent": { "type": "string" }
+      },
+      "required": ["actorUid", "actorEmail", "action", "targetType", "targetId", "description", "timestamp"]
+    },
+    "artist": {
+      "title": "Artist Profile",
+      "description": "Roster artist catalog entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "description": "Linked Firebase Auth User UID" },
+        "slug": { "type": "string" },
+        "name": { "type": "string" },
+        "stageName": { "type": "string" },
+        "legalName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "image": { "type": "string" },
+        "profileImage": { "type": "string" },
+        "coverImage": { "type": "string" },
+        "bio": { "type": "string" },
+        "location": { "type": "string" },
+        "genres": { "type": "array" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "SUSPENDED", "ALUMNI"] },
+        "catalogueNumberPrefix": { "type": "string" },
+        "socialLinks": { "type": "object" },
+        "streamingLinks": { "type": "object" },
+        "releaseIds": { "type": "array" },
+        "featuredQuote": { "type": "string" },
+        "internalNotes": { "type": "string" }
+      },
+      "required": ["id", "slug", "name", "status"]
+    },
+    "release": {
+      "title": "Catalogue Release",
+      "description": "Music release record in catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "slug": { "type": "string" },
+        "catalogueNumber": { "type": "string" },
+        "title": { "type": "string" },
+        "artistIds": { "type": "array" },
+        "artistName": { "type": "string" },
+        "cover": { "type": "string" },
+        "type": { "type": "string", "enum": ["SINGLE", "EP", "ALBUM", "COMPILATION"] },
+        "releaseDate": { "type": "string" },
+        "genres": { "type": "array" },
+        "description": { "type": "string" },
+        "tracks": { "type": "array" },
+        "credits": { "type": "array" },
+        "streamingLinks": { "type": "object" },
+        "status": { "type": "string", "enum": ["OUT NOW", "PRE-ORDER", "ARCHIVE"] }
+      },
+      "required": ["id", "slug", "catalogueNumber", "title", "artistName", "type", "releaseDate", "status"]
+    },
+    "journalPost": {
+      "title": "Journal Post",
+      "description": "Editorial or studio log article",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "slug": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string", "enum": ["EDITORIAL", "ANNOUNCEMENT", "INTERVIEW", "FIELD NOTES", "STUDIO LOG"] },
+        "date": { "type": "string" },
+        "author": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "shortExcerpt": { "type": "string" },
+        "content": { "type": "array" },
+        "readTime": { "type": "string" },
+        "tags": { "type": "array" }
+      },
+      "required": ["id", "slug", "title", "category", "date", "author"]
+    },
+    "contactSubmission": {
+      "title": "Contact Form Submission",
+      "description": "Public general or business inquiry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "department": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "department", "subject", "message", "createdAt"]
+    },
+    "demoSubmission": {
+      "title": "A&R Demo Submission",
+      "description": "Unsolicited or requested music demo pitch",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "artistName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "genre": { "type": "string" },
+        "socialLinks": { "type": "string" },
+        "streamingLinks": { "type": "string" },
+        "demoTitle": { "type": "string" },
+        "message": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileSize": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["artistName", "email", "demoTitle", "createdAt"]
+    },
+    "notification": {
+      "title": "User Notification",
+      "description": "System or admin alert for a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "recipientUid": { "type": "string" },
+        "artistId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "link": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "message", "read", "createdAt"]
+    },
+    "smartLink": {
+      "title": "Smart Link Landing Page",
+      "description": "Multi-platform DSP link redirect page",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "releaseId": { "type": "string" },
+        "slug": { "type": "string" },
+        "title": { "type": "string" },
+        "artistIds": { "type": "array" },
+        "artistName": { "type": "string" },
+        "artwork": { "type": "string" },
+        "dspLinks": { "type": "object" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "clickCount": { "type": "number" }
+      },
+      "required": ["id", "releaseId", "slug", "title", "artwork", "status"]
+    },
+    "smartLinkEvent": {
+      "title": "Smart Link Analytics Click Event",
+      "description": "Anonymized DSP click event for release analytics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "smartLinkId": { "type": "string" },
+        "releaseId": { "type": "string" },
+        "platform": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "referrer": { "type": "string" },
+        "country": { "type": "string" },
+        "device": { "type": "string" }
+      },
+      "required": ["smartLinkId", "releaseId", "platform", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/user" },
+      "description": "User profiles with role authorization"
+    },
+    "/artists/{artistId}": {
+      "schema": { "$ref": "#/entities/artist" },
+      "description": "Catalog roster artists"
+    },
+    "/releases/{releaseId}": {
+      "schema": { "$ref": "#/entities/release" },
+      "description": "Catalog release publications"
+    },
+    "/smartLinks/{smartLinkId}": {
+      "schema": { "$ref": "#/entities/smartLink" },
+      "description": "Release Smart Link landing pages"
+    },
+    "/smartLinkEvents/{eventId}": {
+      "schema": { "$ref": "#/entities/smartLinkEvent" },
+      "description": "Smart Link DSP click analytics events"
+    },
+    "/journal/{postId}": {
+      "schema": { "$ref": "#/entities/journalPost" },
+      "description": "Journal & editorial posts"
+    },
+    "/contactSubmissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/contactSubmission" },
+      "description": "Public contact inquiries"
+    },
+    "/demoSubmissions/{demoId}": {
+      "schema": { "$ref": "#/entities/demoSubmission" },
+      "description": "A&R demo audio pitches"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/notification" },
+      "description": "User account notifications"
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/auditLog" },
+      "description": "System administrative audit trail"
+    }
+  }
+}

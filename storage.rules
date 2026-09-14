@@ -1,0 +1,48 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Public Media (Covers, avatars, public journal images)
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Artist Media
+    match /artists/{artistId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Release Artwork and Audio
+    match /releases/{releaseId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Journal Images
+    match /journal/{postId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Demo Submissions (Upload allowed for pitches, read restricted)
+    match /demos/{demoId}/{allPaths=**} {
+      allow create: if true;
+      allow read, delete: if isSignedIn();
+    }
+  }
+}

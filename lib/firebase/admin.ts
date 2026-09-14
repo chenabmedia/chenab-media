@@ -1,0 +1,437 @@
+import { initializeApp, getApps, cert, getApp, type App } from 'firebase-admin/app';
+import { getAuth, type Auth } from 'firebase-admin/auth';
+import type { Firestore } from 'firebase-admin/firestore';
+import appletConfig from '@/firebase-applet-config.json';
+
+/**
+ * Detects if running within Cloudflare Workers / OpenNext Edge runtime.
+ * Uses multiple reliable markers provided by OpenNext Cloudflare and the workerd runtime.
+ */
+export function isCloudflareWorkerRuntime(): boolean {
+  if (typeof globalThis !== 'undefined') {
+    // 1. OpenNext Cloudflare AsyncLocalStorage context symbol
+    if (Symbol.for('__cloudflare-context__') in globalThis) return true;
+    // 2. Cloudflare workerd runtime WebSocketPair primitive
+    if (typeof (globalThis as any).WebSocketPair !== 'undefined') return true;
+    // 3. Next.js Edge Runtime marker
+    if (typeof (globalThis as any).EdgeRuntime === 'string') return true;
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    // 4. OpenNext Cloudflare origin injection or edge runtime marker
+    if (process.env.OPEN_NEXT_ORIGIN || process.env.CF_PAGES || process.env.NEXT_RUNTIME === 'edge') {
+      return true;
+    }
+  }
+  if (typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers') {
+    return true;
+  }
+  return false;
+}
+
+function tryReadFs(filePath: string): string | null {
+  try {
+    if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+      // Dynamic require to prevent bundling Node fs into edge runtimes
+      const nodeFs = require('fs');
+      if (nodeFs && typeof nodeFs.existsSync === 'function' && nodeFs.existsSync(filePath)) {
+        return nodeFs.readFileSync(filePath, 'utf-8');
+      }
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * Server-side Firebase Admin Initialization
+ * 
+ * Used strictly in Next.js Server Components, Server Actions, and API Routes.
+ * Never imported or exposed in client components.
+ */
+
+export const projectId = 'chenabmedia-in';
+export const FIRESTORE_DATABASE_ID = '(default)';
+
+let serviceAccountProjectId: string | null = null;
+let credentialParseSuccess = false;
+
+const envCandidatesList = [
+  process.env.FIREBASE_SERVICE_ACCOUNT,
+  process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+  process.env.FIREBASE_ADMIN_CREDENTIALS,
+  process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+  process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON,
+  process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  process.env.GCP_SERVICE_ACCOUNT,
+  process.env.FIREBASE_ADMIN_SDK_CONFIG,
+  process.env.FIREBASE_CREDENTIALS,
+  process.env.FIREBASE_CONFIG,
+  process.env.FIREBASE_KEY,
+  process.env.SERVICE_ACCOUNT_KEY,
+  process.env.SERVICE_ACCOUNT_JSON,
+  process.env.GCP_SA_KEY,
+  process.env.GCP_SERVICE_ACCOUNT_KEY,
+  process.env.GOOGLE_CREDENTIALS,
+  process.env.FIREBASE_SERVICE_ACCOUNT_BASE64,
+  process.env.FIREBASE_ADMIN_KEY,
+  process.env.GCP_CREDENTIALS,
+  process.env.RAILWAY_FIREBASE_SERVICE_ACCOUNT,
+];
+
+const serviceAccountCandidatePresent = envCandidatesList.some(c => Boolean(c && c.trim()));
+const clientEmailPresent = Boolean(
+  process.env.FIREBASE_CLIENT_EMAIL ||
+  process.env.GCP_CLIENT_EMAIL ||
+  process.env.FIREBASE_ADMIN_CLIENT_EMAIL ||
+  process.env.CLIENT_EMAIL ||
+  process.env.SA_CLIENT_EMAIL
+);
+const privateKeyPresent = Boolean(
+  process.env.FIREBASE_PRIVATE_KEY ||
+  process.env.GCP_PRIVATE_KEY ||
+  process.env.FIREBASE_ADMIN_PRIVATE_KEY ||
+  process.env.PRIVATE_KEY ||
+  process.env.SA_PRIVATE_KEY
+);
+
+function sanitizeRawJsonNewlines(str: string): string {
+  let sanitized = '';
+  let inString = false;
+  let isEscaped = false;
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === '"' && !isEscaped) {
+      inString = !inString;
+      sanitized += char;
+    } else if (inString && (char === '\n' || char === '\r')) {
+      if (char === '\r' && str[i + 1] === '\n') {
+        i++;
+      }
+      sanitized += '\\n';
+    } else {
+      sanitized += char;
+    }
+    if (char === '\\' && !isEscaped) {
+      isEscaped = true;
+    } else {
+      isEscaped = false;
+    }
+  }
+  return sanitized;
+}
+
+function extractViaRegex(str: string): any {
+  const clientEmailMatch = str.match(/"client_email"\s*:\s*"([^"]+)"/) || str.match(/"clientEmail"\s*:\s*"([^"]+)"/);
+  const projectIdMatch = str.match(/"project_id"\s*:\s*"([^"]+)"/) || str.match(/"projectId"\s*:\s*"([^"]+)"/);
+  const privateKeyMatch = str.match(/"private_key"\s*:\s*"([\s\S]*?)"(?=\s*[,}])/) || str.match(/"privateKey"\s*:\s*"([\s\S]*?)"(?=\s*[,}])/);
+
+  if (clientEmailMatch && privateKeyMatch) {
+    return {
+      project_id: projectIdMatch ? projectIdMatch[1] : projectId,
+      client_email: clientEmailMatch[1],
+      private_key: privateKeyMatch[1],
+    };
+  }
+  return null;
+}
+
+function parseServiceAccountInput(rawInput: string | undefined): any {
+  if (!rawInput || typeof rawInput !== 'string') return null;
+  let str = rawInput.trim().replace(/^\uFEFF/, '');
+  if (!str) return null;
+
+  // Strip outer quotes repeatedly
+  while (
+    (str.startsWith("'") && str.endsWith("'")) ||
+    (str.startsWith('"') && str.endsWith('"')) ||
+    (str.startsWith('`') && str.endsWith('`'))
+  ) {
+    str = str.slice(1, -1).trim().replace(/^\uFEFF/, '');
+  }
+
+  // 1. File path check
+  if (!str.includes('\n') && str.length < 500 && (str.startsWith('/') || str.startsWith('./') || str.endsWith('.json'))) {
+    try {
+      const fileContent = tryReadFs(str);
+      if (fileContent) {
+        const parsedFile = parseServiceAccountInput(fileContent);
+        if (parsedFile) return parsedFile;
+      }
+    } catch {}
+  }
+
+  // 2. Base64 decode check
+  try {
+    const decoded = Buffer.from(str, 'base64').toString('utf-8').trim().replace(/^\uFEFF/, '');
+    if (decoded.includes('{') || decoded.includes('private_key')) {
+      const recursiveParsed = parseServiceAccountInput(decoded);
+      if (recursiveParsed) return recursiveParsed;
+    }
+  } catch {}
+
+  // 3. Direct JSON check
+  if (str.includes('{')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+
+    try {
+      const sanitized = sanitizeRawJsonNewlines(str);
+      const parsed = JSON.parse(sanitized);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+
+    try {
+      const unescaped = str
+        .replace(/\\"/g, '"')
+        .replace(/\\\\n/g, '\\n')
+        .replace(/\\n/g, '\n');
+      const parsed = JSON.parse(unescaped);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+  }
+
+  // 4. Embedded JSON substring check
+  const firstBrace = str.indexOf('{');
+  const lastBrace = str.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const subStr = str.substring(firstBrace, lastBrace + 1);
+    try {
+      const parsed = JSON.parse(subStr);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+    try {
+      const sanitized = sanitizeRawJsonNewlines(subStr);
+      const parsed = JSON.parse(sanitized);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+    try {
+      const unescapedSub = subStr.replace(/\\"/g, '"').replace(/\\\\n/g, '\\n');
+      const parsed = JSON.parse(unescapedSub);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {}
+  }
+
+  // 5. Regex extraction fallback
+  const regexResult = extractViaRegex(str);
+  if (regexResult) return regexResult;
+
+  return null;
+}
+
+function getServiceAccountCredential() {
+  for (const candidate of envCandidatesList) {
+    if (!candidate || !candidate.trim()) continue;
+    const parsed = parseServiceAccountInput(candidate);
+    if (parsed) {
+      const pId = parsed.project_id || parsed.projectId || projectId;
+      let clientEmail = parsed.client_email || parsed.clientEmail || parsed.client_email_address;
+      let privateKey = parsed.private_key || parsed.privateKey;
+
+      if (clientEmail && privateKey) {
+        if (typeof clientEmail === 'string') {
+          clientEmail = clientEmail.trim().replace(/^["']|["']$/g, '');
+        }
+        if (typeof privateKey === 'string') {
+          privateKey = privateKey
+            .trim()
+            .replace(/^["']|["']$/g, '')
+            .replace(/\\n/g, '\n')
+            .replace(/\r/g, '');
+        }
+        try {
+          const credential = cert({
+            projectId: pId,
+            clientEmail,
+            privateKey,
+          });
+          serviceAccountProjectId = pId;
+          credentialParseSuccess = true;
+          return credential;
+        } catch (e) {
+          console.warn('[Firebase Admin] cert creation error from JSON candidate:', e);
+        }
+      }
+    }
+  }
+
+  // Fallback: Check individual client email & private key env vars
+  let clientEmail =
+    process.env.FIREBASE_CLIENT_EMAIL ||
+    process.env.GCP_CLIENT_EMAIL ||
+    process.env.FIREBASE_ADMIN_CLIENT_EMAIL ||
+    process.env.CLIENT_EMAIL ||
+    process.env.SA_CLIENT_EMAIL;
+
+  let privateKey =
+    process.env.FIREBASE_PRIVATE_KEY ||
+    process.env.GCP_PRIVATE_KEY ||
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY ||
+    process.env.PRIVATE_KEY ||
+    process.env.SA_PRIVATE_KEY;
+
+  if (clientEmail && privateKey) {
+    clientEmail = clientEmail.trim().replace(/^["']|["']$/g, '');
+    privateKey = privateKey.trim().replace(/^["']|["']$/g, '').replace(/\\n/g, '\n').replace(/\r/g, '');
+
+    try {
+      const credential = cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      });
+      serviceAccountProjectId = projectId;
+      credentialParseSuccess = true;
+      return credential;
+    } catch (e) {
+      console.warn('[Firebase Admin] cert creation error from split env vars:', e);
+    }
+  }
+
+  return undefined;
+}
+
+let adminAppInstance: App | null = null;
+
+export function initAdminApp(): App | null {
+  // In Cloudflare Workers / Edge isolates, Node Firebase Admin SDK is not used.
+  if (isCloudflareWorkerRuntime()) {
+    return null;
+  }
+
+  if (getApps().length > 0) {
+    adminAppInstance = getApp();
+    return adminAppInstance;
+  }
+
+  try {
+    const credential = getServiceAccountCredential();
+    if (credential) {
+      adminAppInstance = initializeApp({ credential, projectId });
+      return adminAppInstance;
+    } else {
+      const gCreds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      if (gCreds && tryReadFs(gCreds)) {
+        adminAppInstance = initializeApp({ projectId });
+        return adminAppInstance;
+      } else {
+        console.warn('[Firebase Admin] No service account credentials found in environment variables.');
+      }
+    }
+  } catch (error) {
+    console.error('[Firebase Admin] SDK initialization error:', error);
+  }
+  return null;
+}
+
+// Lazy accessor for Admin App
+export function getAdminApp(): App | null {
+  if (isCloudflareWorkerRuntime()) return null;
+  return adminAppInstance || initAdminApp();
+}
+
+export const adminApp: App | null = isCloudflareWorkerRuntime()
+  ? null
+  : (getApps().length ? getApp() : null);
+
+export function getAdminAuth(): Auth | null {
+  if (isCloudflareWorkerRuntime()) {
+    return null;
+  }
+  const app = getApps().length ? getApp() : initAdminApp();
+  return app ? getAuth(app) : null;
+}
+
+/**
+ * Guarded adminAuth export:
+ * - In Cloudflare Workers: strictly null (so token verification falls back safely without eval errors).
+ * - In Node.js: lazy proxy delegating to getAdminAuth().
+ */
+export const adminAuth: Auth | null = isCloudflareWorkerRuntime()
+  ? null
+  : new Proxy({} as Auth, {
+      get(_target, prop) {
+        const auth = getAdminAuth();
+        if (!auth) return undefined;
+        const val = (auth as any)[prop];
+        return typeof val === 'function' ? val.bind(auth) : val;
+      },
+    });
+
+let cachedDb: Firestore | null = null;
+
+/**
+ * Lazy, guarded Firestore database accessor:
+ * - In Cloudflare Workers: returns null immediately to prevent firebase-admin/firestore,
+ *   @google-cloud/firestore, google-gax, @grpc/grpc-js, and protobufjs from executing.
+ *   This enables public catalog queries to use the high-performance Firestore REST API fallback (fetch).
+ * - In Node.js server environments: dynamically loads firebase-admin/firestore on first call.
+ */
+export function getAdminDb(): Firestore | null {
+  if (isCloudflareWorkerRuntime()) {
+    return null;
+  }
+  if (cachedDb) return cachedDb;
+
+  const app = getApps().length ? getApp() : initAdminApp();
+  if (!app) return null;
+
+  try {
+    // Dynamically require firebase-admin/firestore ONLY in supported Node environments
+    const { getFirestore } = require('firebase-admin/firestore');
+    cachedDb = getFirestore(app);
+    return cachedDb;
+  } catch (err) {
+    console.error('[Firebase Admin] getFirestore error:', err);
+    return null;
+  }
+}
+
+/**
+ * Guarded adminDb export:
+ * - In Cloudflare Workers: strictly null (preventing any gRPC/protobuf initialization).
+ * - In Node.js server environments: lazy proxy delegating to getAdminDb() on first access.
+ */
+export const adminDb: Firestore | null = isCloudflareWorkerRuntime()
+  ? null
+  : new Proxy({} as Firestore, {
+      get(_target, prop) {
+        const db = getAdminDb();
+        if (!db) return undefined;
+        const val = (db as any)[prop];
+        return typeof val === 'function' ? val.bind(db) : val;
+      },
+    });
+
+export interface FirebaseRuntimeDiagnostics {
+  clientFirebaseProjectId: string;
+  serverAdminProjectId: string;
+  serviceAccountProjectId: string;
+  firestoreDatabaseId: string;
+  adminAppName: string;
+  isInitialized: boolean;
+  isCloudflareWorker: boolean;
+  serviceAccountCandidatePresent: boolean;
+  clientEmailPresent: boolean;
+  privateKeyPresent: boolean;
+  credentialParseSuccess: boolean;
+}
+
+export function getAdminDiagnostics(): FirebaseRuntimeDiagnostics {
+  const isCF = isCloudflareWorkerRuntime();
+  const currentApp = !isCF && getApps().length ? getApp() : null;
+  return {
+    clientFirebaseProjectId: projectId,
+    serverAdminProjectId: currentApp?.options?.projectId || projectId,
+    serviceAccountProjectId: isCF ? 'cloudflare-rest-mode' : (serviceAccountProjectId || (credentialParseSuccess ? 'parsed' : 'none')),
+    firestoreDatabaseId: FIRESTORE_DATABASE_ID,
+    adminAppName: isCF ? 'cloudflare-worker' : (currentApp?.name || 'none'),
+    isInitialized: !isCF && getApps().length > 0,
+    isCloudflareWorker: isCF,
+    serviceAccountCandidatePresent,
+    clientEmailPresent,
+    privateKeyPresent,
+    credentialParseSuccess,
+  };
+}
+

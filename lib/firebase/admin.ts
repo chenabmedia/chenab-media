@@ -1,32 +1,7 @@
 import { initializeApp, getApps, cert, getApp, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
-import type { Firestore } from 'firebase-admin/firestore';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import appletConfig from '@/firebase-applet-config.json';
-
-/**
- * Detects if running within Cloudflare Workers / OpenNext Edge runtime.
- * Uses multiple reliable markers provided by OpenNext Cloudflare and the workerd runtime.
- */
-export function isCloudflareWorkerRuntime(): boolean {
-  if (typeof globalThis !== 'undefined') {
-    // 1. OpenNext Cloudflare AsyncLocalStorage context symbol
-    if (Symbol.for('__cloudflare-context__') in globalThis) return true;
-    // 2. Cloudflare workerd runtime WebSocketPair primitive
-    if (typeof (globalThis as any).WebSocketPair !== 'undefined') return true;
-    // 3. Next.js Edge Runtime marker
-    if (typeof (globalThis as any).EdgeRuntime === 'string') return true;
-  }
-  if (typeof process !== 'undefined' && process.env) {
-    // 4. OpenNext Cloudflare origin injection or edge runtime marker
-    if (process.env.OPEN_NEXT_ORIGIN || process.env.CF_PAGES || process.env.NEXT_RUNTIME === 'edge') {
-      return true;
-    }
-  }
-  if (typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers') {
-    return true;
-  }
-  return false;
-}
 
 function tryReadFs(filePath: string): string | null {
   try {
@@ -294,11 +269,6 @@ function getServiceAccountCredential() {
 let adminAppInstance: App | null = null;
 
 export function initAdminApp(): App | null {
-  // In Cloudflare Workers / Edge isolates, Node Firebase Admin SDK is not used.
-  if (isCloudflareWorkerRuntime()) {
-    return null;
-  }
-
   if (getApps().length > 0) {
     adminAppInstance = getApp();
     return adminAppInstance;
@@ -326,59 +296,40 @@ export function initAdminApp(): App | null {
 
 // Lazy accessor for Admin App
 export function getAdminApp(): App | null {
-  if (isCloudflareWorkerRuntime()) return null;
   return adminAppInstance || initAdminApp();
 }
 
-export const adminApp: App | null = isCloudflareWorkerRuntime()
-  ? null
-  : (getApps().length ? getApp() : null);
+export const adminApp: App | null = getApps().length ? getApp() : null;
 
 export function getAdminAuth(): Auth | null {
-  if (isCloudflareWorkerRuntime()) {
-    return null;
-  }
   const app = getApps().length ? getApp() : initAdminApp();
   return app ? getAuth(app) : null;
 }
 
 /**
- * Guarded adminAuth export:
- * - In Cloudflare Workers: strictly null (so token verification falls back safely without eval errors).
- * - In Node.js: lazy proxy delegating to getAdminAuth().
+ * Lazy proxy delegating to getAdminAuth() on first access.
  */
-export const adminAuth: Auth | null = isCloudflareWorkerRuntime()
-  ? null
-  : new Proxy({} as Auth, {
-      get(_target, prop) {
-        const auth = getAdminAuth();
-        if (!auth) return undefined;
-        const val = (auth as any)[prop];
-        return typeof val === 'function' ? val.bind(auth) : val;
-      },
-    });
+export const adminAuth: Auth | null = new Proxy({} as Auth, {
+  get(_target, prop) {
+    const auth = getAdminAuth();
+    if (!auth) return undefined;
+    const val = (auth as any)[prop];
+    return typeof val === 'function' ? val.bind(auth) : val;
+  },
+});
 
 let cachedDb: Firestore | null = null;
 
 /**
- * Lazy, guarded Firestore database accessor:
- * - In Cloudflare Workers: returns null immediately to prevent firebase-admin/firestore,
- *   @google-cloud/firestore, google-gax, @grpc/grpc-js, and protobufjs from executing.
- *   This enables public catalog queries to use the high-performance Firestore REST API fallback (fetch).
- * - In Node.js server environments: dynamically loads firebase-admin/firestore on first call.
+ * Lazy, memoized Firestore database accessor using native firebase-admin/firestore.
  */
 export function getAdminDb(): Firestore | null {
-  if (isCloudflareWorkerRuntime()) {
-    return null;
-  }
   if (cachedDb) return cachedDb;
 
   const app = getApps().length ? getApp() : initAdminApp();
   if (!app) return null;
 
   try {
-    // Dynamically require firebase-admin/firestore ONLY in supported Node environments
-    const { getFirestore } = require('firebase-admin/firestore');
     cachedDb = getFirestore(app);
     return cachedDb;
   } catch (err) {
@@ -388,20 +339,16 @@ export function getAdminDb(): Firestore | null {
 }
 
 /**
- * Guarded adminDb export:
- * - In Cloudflare Workers: strictly null (preventing any gRPC/protobuf initialization).
- * - In Node.js server environments: lazy proxy delegating to getAdminDb() on first access.
+ * Lazy proxy delegating to getAdminDb() on first access.
  */
-export const adminDb: Firestore | null = isCloudflareWorkerRuntime()
-  ? null
-  : new Proxy({} as Firestore, {
-      get(_target, prop) {
-        const db = getAdminDb();
-        if (!db) return undefined;
-        const val = (db as any)[prop];
-        return typeof val === 'function' ? val.bind(db) : val;
-      },
-    });
+export const adminDb: Firestore | null = new Proxy({} as Firestore, {
+  get(_target, prop) {
+    const db = getAdminDb();
+    if (!db) return undefined;
+    const val = (db as any)[prop];
+    return typeof val === 'function' ? val.bind(db) : val;
+  },
+});
 
 export interface FirebaseRuntimeDiagnostics {
   clientFirebaseProjectId: string;
@@ -410,7 +357,7 @@ export interface FirebaseRuntimeDiagnostics {
   firestoreDatabaseId: string;
   adminAppName: string;
   isInitialized: boolean;
-  isCloudflareWorker: boolean;
+  isCloudflareWorker?: boolean;
   serviceAccountCandidatePresent: boolean;
   clientEmailPresent: boolean;
   privateKeyPresent: boolean;
@@ -418,16 +365,15 @@ export interface FirebaseRuntimeDiagnostics {
 }
 
 export function getAdminDiagnostics(): FirebaseRuntimeDiagnostics {
-  const isCF = isCloudflareWorkerRuntime();
-  const currentApp = !isCF && getApps().length ? getApp() : null;
+  const currentApp = getApps().length ? getApp() : null;
   return {
     clientFirebaseProjectId: projectId,
     serverAdminProjectId: currentApp?.options?.projectId || projectId,
-    serviceAccountProjectId: isCF ? 'cloudflare-rest-mode' : (serviceAccountProjectId || (credentialParseSuccess ? 'parsed' : 'none')),
+    serviceAccountProjectId: serviceAccountProjectId || (credentialParseSuccess ? 'parsed' : 'none'),
     firestoreDatabaseId: FIRESTORE_DATABASE_ID,
-    adminAppName: isCF ? 'cloudflare-worker' : (currentApp?.name || 'none'),
-    isInitialized: !isCF && getApps().length > 0,
-    isCloudflareWorker: isCF,
+    adminAppName: currentApp?.name || 'none',
+    isInitialized: getApps().length > 0,
+    isCloudflareWorker: false,
     serviceAccountCandidatePresent,
     clientEmailPresent,
     privateKeyPresent,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 
 export async function GET(req: NextRequest) {
   const authRes = await verifyServerAuth(req, 'releases.view');
@@ -8,8 +8,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
   }
 
-  if (!adminDb) {
-    return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
+  const db = getAdminDb();
+  if (!db) {
+    return NextResponse.json({ error: 'Firestore Admin service unavailable' }, { status: 503 });
   }
 
   const { searchParams } = new URL(req.url);
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     let smartLinkSlugExists = false;
 
     if (catNum) {
-      const snap = await adminDb
+      const snap = await db
         .collection('releases')
         .where('catalogueNumber', '==', catNum)
         .get();
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (slug) {
-      const snap = await adminDb
+      const snap = await db
         .collection('releases')
         .where('slug', '==', slug)
         .get();
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (smartLinkSlug) {
-      const snap = await adminDb
+      const snap = await db
         .collection('smartLinks')
         .where('slug', '==', smartLinkSlug)
         .get();

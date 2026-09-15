@@ -7,17 +7,16 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authRes = await verifyServerAuth(req, 'artists.view');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id } = await params;
-
   try {
-    const db = adminDb || getAdminDb();
+    const authRes = await verifyServerAuth(req, 'artists.view');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const db = getAdminDb();
     if (!db) {
-      return NextResponse.json({ error: 'Database instance not initialized' }, { status: 500 });
+      return NextResponse.json({ error: 'Database instance not initialized' }, { status: 503 });
     }
 
     let artistDoc = await db.collection('artists').doc(id).get();
@@ -46,7 +45,7 @@ export async function GET(
 
     return NextResponse.json({ artist: artistData, userAccount }, { status: 200 });
   } catch (err: any) {
-    console.error(`Error fetching artist ${id}:`, err);
+    console.error(`Error fetching artist:`, err);
     return NextResponse.json({ error: err.message || 'Failed to fetch artist details' }, { status: 500 });
   }
 }
@@ -55,19 +54,18 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authRes = await verifyServerAuth(req, 'artists.edit');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id } = await params;
-
   try {
+    const authRes = await verifyServerAuth(req, 'artists.edit');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = await params;
     const body = await req.json();
-    const db = adminDb || getAdminDb();
+    const db = getAdminDb();
 
     if (!db) {
-      return NextResponse.json({ error: 'Database instance not initialized' }, { status: 500 });
+      return NextResponse.json({ error: 'Database instance not initialized' }, { status: 503 });
     }
 
     let artistRef = db.collection('artists').doc(id);
@@ -103,7 +101,7 @@ export async function PATCH(
     await artistRef.set(updateData, { merge: true });
 
     // Sync status and displayName to users collection & Firebase Auth if changed
-    const auth = adminAuth || getAdminAuth();
+    const auth = getAdminAuth();
     if (currentArtist?.userId) {
       const userRef = db.collection('users').doc(currentArtist.userId);
       const userUpdate: Record<string, any> = { updatedAt: now };
@@ -139,7 +137,7 @@ export async function PATCH(
     const updatedDoc = await artistRef.get();
     return NextResponse.json({ success: true, artist: { ...updatedDoc.data(), id: updatedDoc.id } }, { status: 200 });
   } catch (err: any) {
-    console.error(`Error updating artist ${id}:`, err);
+    console.error(`Error updating artist:`, err);
     return NextResponse.json({ error: err.message || 'Failed to update artist profile' }, { status: 500 });
   }
 }
@@ -148,17 +146,16 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authRes = await verifyServerAuth(req, 'artists.delete');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id } = await params;
-
   try {
-    const db = adminDb || getAdminDb();
+    const authRes = await verifyServerAuth(req, 'artists.delete');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const db = getAdminDb();
     if (!db) {
-      return NextResponse.json({ error: 'Database instance not initialized' }, { status: 500 });
+      return NextResponse.json({ error: 'Database instance not initialized' }, { status: 503 });
     }
 
     let artistRef = db.collection('artists').doc(id);
@@ -188,7 +185,7 @@ export async function DELETE(
         { merge: true }
       );
 
-      const auth = adminAuth || getAdminAuth();
+      const auth = getAdminAuth();
       if (auth) {
         try {
           await auth.updateUser(artistData.userId, { disabled: true });
@@ -210,7 +207,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Artist account suspended successfully' }, { status: 200 });
   } catch (err: any) {
-    console.error(`Error disabling artist ${id}:`, err);
+    console.error(`Error disabling artist:`, err);
     return NextResponse.json({ error: err.message || 'Failed to disable artist account' }, { status: 500 });
   }
 }

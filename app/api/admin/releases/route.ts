@@ -14,14 +14,14 @@ function generateSlug(str: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  const authRes = await verifyServerAuth(req, 'releases.view');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'releases.view');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
     let releasesList: Release[] = [];
-    const db = adminDb || getAdminDb();
+    const db = getAdminDb();
 
     if (db) {
       const snap = await db.collection('releases').get();
@@ -38,16 +38,16 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authRes = await verifyServerAuth(req, 'releases.create');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  if (!adminDb) {
-    return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'releases.create');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Database instance not configured or unavailable' }, { status: 503 });
+    }
     const body = await req.json();
     const {
       title,
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Check duplicate catalogue number in Firestore
-    const catCheck = await adminDb
+    const catCheck = await db
       .collection('releases')
       .where('catalogueNumber', '==', catNum)
       .get();
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Check duplicate release slug in Firestore
-    const slugCheck = await adminDb
+    const slugCheck = await db
       .collection('releases')
       .where('slug', '==', slug)
       .get();
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Check duplicate smart link slug in Firestore
-    const smartLinkCheck = await adminDb
+    const smartLinkCheck = await db
       .collection('smartLinks')
       .where('slug', '==', smartLinkSlug)
       .get();
@@ -165,10 +165,10 @@ export async function POST(req: NextRequest) {
     const allArtistIds = Array.from(new Set([...primaryArtistIds, ...featuredArtistIds]));
     const allGenres = Array.from(new Set([genre, ...subgenres, ...genres])).filter(Boolean);
 
-    const newReleaseRef = adminDb.collection('releases').doc();
+    const newReleaseRef = db.collection('releases').doc();
     const releaseId = newReleaseRef.id;
 
-    const smartLinkRef = adminDb.collection('smartLinks').doc();
+    const smartLinkRef = db.collection('smartLinks').doc();
     const smartLinkId = smartLinkRef.id;
 
     const now = new Date().toISOString();

@@ -17,18 +17,18 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const authRes = await verifyServerAuth(req, 'releases.view');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  const db = adminDb || getAdminDb();
-  if (!db) {
-    return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
-  }
-
   try {
+    const { id } = await params;
+    const authRes = await verifyServerAuth(req, 'releases.view');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Database instance not configured' }, { status: 503 });
+    }
+
     let doc = await db.collection('releases').doc(id).get();
     if (!doc.exists) {
       // Fallback: query by stored 'id' field
@@ -54,18 +54,18 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const authRes = await verifyServerAuth(req, 'releases.edit');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  const db = adminDb || getAdminDb();
-  if (!db) {
-    return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
-  }
-
   try {
+    const { id } = await params;
+    const authRes = await verifyServerAuth(req, 'releases.edit');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Database instance not configured' }, { status: 503 });
+    }
+
     let docRef = db.collection('releases').doc(id);
     let existingSnap = await docRef.get();
     if (!existingSnap.exists) {
@@ -428,18 +428,18 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const authRes = await verifyServerAuth(req, 'releases.delete');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  const db = adminDb || getAdminDb();
-  if (!db) {
-    return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
-  }
-
   try {
+    const { id } = await params;
+    const authRes = await verifyServerAuth(req, 'releases.delete');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Database instance not configured' }, { status: 503 });
+    }
+
     let docRef = db.collection('releases').doc(id);
     let snap = await docRef.get();
     if (!snap.exists) {

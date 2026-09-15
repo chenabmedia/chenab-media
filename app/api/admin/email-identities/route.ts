@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import { EmailIdentity } from '@/types/site';
@@ -13,11 +13,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
     }
 
-    if (!adminDb) {
-      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
     }
 
-    const snapshot = await adminDb.collection('emailIdentities').get();
+    const snapshot = await db.collection('emailIdentities').get();
     let identities: EmailIdentity[] = snapshot.docs.map(doc => {
       const data = doc.data();
       return { ...data, id: doc.id } as EmailIdentity;
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
       ];
 
       for (const item of defaultIdentities) {
-        const ref = await adminDb.collection('emailIdentities').add(item);
+        const ref = await db.collection('emailIdentities').add(item);
         identities.push({ ...item, id: ref.id });
       }
     }
@@ -50,8 +51,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: authRes.error || 'Unauthorized: email.identities.manage permission required' }, { status: 403 });
     }
 
-    if (!adminDb) {
-      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
     }
 
     const body = await req.json();
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest) {
       updatedAt: now,
     };
 
-    const ref = await adminDb.collection('emailIdentities').add(newIdentity);
+    const ref = await db.collection('emailIdentities').add(newIdentity);
     const newId = ref.id;
 
     await recordAuditLog({

@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { sendTemplateEmail } from '@/lib/email/service';
 import { recordAuditLog } from '@/lib/firebase/audit';
 
 export async function POST(req: NextRequest) {
-  const authRes = await verifyServerAuth(req);
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req);
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { artistName, artistEmail, contractType, agreementTitle, expiryDays } = body;
 
@@ -37,8 +37,9 @@ export async function POST(req: NextRequest) {
       issuedBy: authRes.profile.uid,
     };
 
-    if (adminDb) {
-      await adminDb.collection('agreements').doc(agreementId).set(agreementData);
+    const db = getAdminDb();
+    if (db) {
+      await db.collection('agreements').doc(agreementId).set(agreementData);
     }
 
     // Trigger template email: ArtistAgreement

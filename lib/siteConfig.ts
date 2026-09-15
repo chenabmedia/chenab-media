@@ -3,7 +3,7 @@ import { adminDb, getAdminDb } from './firebase/admin';
 import appletConfig from '@/firebase-applet-config.json';
 
 export async function getSiteConfig(): Promise<SiteConfig> {
-  const db = adminDb || getAdminDb();
+  const db = getAdminDb();
   if (db) {
     try {
       const docRef = db.collection('siteConfig').doc('global');
@@ -52,7 +52,7 @@ export async function getSiteConfig(): Promise<SiteConfig> {
 }
 
 export async function saveSiteConfig(config: SiteConfig): Promise<void> {
-  const db = adminDb || getAdminDb();
+  const db = getAdminDb();
   if (!db) {
     throw new Error('Firebase Admin SDK is not initialized.');
   }

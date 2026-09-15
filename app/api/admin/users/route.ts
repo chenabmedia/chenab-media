@@ -1,33 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminAuth, adminDb, getAdminDiagnostics } from '@/lib/firebase/admin';
+import { getAdminAuth, getAdminDb, getAdminDiagnostics } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import { CreateAdminInput } from '@/types/admin';
 import { UserProfile } from '@/types/auth';
 import { ALL_PERMISSIONS } from '@/lib/auth/permissions';
 
 export async function GET(req: NextRequest) {
-  const authRes = await verifyServerAuth(req, 'admins.view');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  // Safe diagnostic logging before Firestore query
-  const diag = getAdminDiagnostics();
-  console.log('[API /api/admin/users] Safe Firestore Diagnostics:', {
-    projectId: diag.serverAdminProjectId,
-    databaseId: diag.firestoreDatabaseId,
-    adminAppName: diag.adminAppName,
-  });
-
-  if (!adminDb) {
-    return NextResponse.json({ error: 'Server-side Firebase Admin DB is not initialized.' }, { status: 500 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'admins.view');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Server-side Firebase Admin DB is not initialized.' }, { status: 503 });
+    }
+
     let usersList: UserProfile[] = [];
 
-    const snap = await adminDb.collection('users').get();
+    const snap = await db.collection('users').get();
     snap.forEach((doc) => {
       usersList.push(doc.data() as UserProfile);
     });
@@ -48,7 +41,7 @@ export async function GET(req: NextRequest) {
         createdBy: 'system_bootstrap',
       };
       usersList.unshift(zaazzeProfile);
-      adminDb.collection('users').doc(SUPERADMIN_UID).set(zaazzeProfile, { merge: true }).catch(() => {});
+      db.collection('users').doc(SUPERADMIN_UID).set(zaazzeProfile, { merge: true }).catch(() => {});
     }
 
     return NextResponse.json({ users: usersList }, { status: 200 });
@@ -59,12 +52,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authRes = await verifyServerAuth(req, 'admins.create');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'admins.create');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
     const body: CreateAdminInput & { password?: string } = await req.json();
     const { displayName, email, role, status, permissions, password } = body;
 
@@ -80,10 +73,12 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    const db = getAdminDb();
+    const auth = getAdminAuth();
 
     // Check for duplicate email in Firestore
-    if (adminDb) {
-      const existingDocSnap = await adminDb.collection('users').where('email', '==', normalizedEmail).get();
+    if (db) {
+      const existingDocSnap = await db.collection('users').where('email', '==', normalizedEmail).get();
       if (!existingDocSnap.empty) {
         return NextResponse.json(
           { error: `An administrative account with email ${normalizedEmail} already exists.` },
@@ -94,18 +89,18 @@ export async function POST(req: NextRequest) {
     let newUid = `user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     // If Admin SDK is available, create Firebase Auth user
-    if (adminAuth) {
+    if (auth) {
       try {
-        const existingAuthUser = await adminAuth.getUserByEmail(normalizedEmail);
+        const existingAuthUser = await auth.getUserByEmail(normalizedEmail);
         newUid = existingAuthUser.uid;
         // Update auth user displayName if changed
-        await adminAuth.updateUser(newUid, {
+        await auth.updateUser(newUid, {
           displayName,
           disabled: status === 'DISABLED' || status === 'SUSPENDED',
         });
       } catch (authErr: any) {
         if (authErr.code === 'auth/user-not-found') {
-          const createdAuth = await adminAuth.createUser({
+          const createdAuth = await auth.createUser({
             email: normalizedEmail,
             emailVerified: true,
             password: password || 'ChenabAdmin2026!',
@@ -114,7 +109,7 @@ export async function POST(req: NextRequest) {
           });
           newUid = createdAuth.uid;
         } else {
-          throw authErr;
+          console.warn('[Admin Users] Auth user creation warning:', authErr);
         }
       }
     }
@@ -133,8 +128,8 @@ export async function POST(req: NextRequest) {
       createdBy: authRes.profile.uid,
     };
 
-    if (adminDb) {
-      await adminDb.collection('users').doc(newUid).set(newProfile, { merge: true });
+    if (db) {
+      await db.collection('users').doc(newUid).set(newProfile, { merge: true });
     }
 
     // Trigger template email: AdminInvite

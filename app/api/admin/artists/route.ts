@@ -4,14 +4,14 @@ import { adminAuth, adminDb, getAdminDb, getAdminAuth } from '@/lib/firebase/adm
 import { recordAuditLog } from '@/lib/firebase/audit';
 
 export async function GET(req: NextRequest) {
-  const authRes = await verifyServerAuth(req, 'artists.view');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'artists.view');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
     let artistsList: any[] = [];
-    const db = adminDb || getAdminDb();
+    const db = getAdminDb();
 
     if (db) {
       const snap = await db.collection('artists').get();
@@ -28,12 +28,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authRes = await verifyServerAuth(req, 'artists.create');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'artists.create');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
     const {
       stageName,
@@ -61,10 +61,12 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    const db = getAdminDb();
+    const auth = getAdminAuth();
 
     // Check duplicate email
-    if (adminDb) {
-      const existingDocSnap = await adminDb.collection('users').where('email', '==', normalizedEmail).get();
+    if (db) {
+      const existingDocSnap = await db.collection('users').where('email', '==', normalizedEmail).get();
       if (!existingDocSnap.empty) {
         return NextResponse.json(
           { error: `An account with email address ${normalizedEmail} already exists in the system.` },
@@ -76,17 +78,17 @@ export async function POST(req: NextRequest) {
     let uid = `user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     // Provision in Firebase Auth if available
-    if (adminAuth) {
+    if (auth) {
       try {
-        const existingAuthUser = await adminAuth.getUserByEmail(normalizedEmail);
+        const existingAuthUser = await auth.getUserByEmail(normalizedEmail);
         uid = existingAuthUser.uid;
-        await adminAuth.updateUser(uid, {
+        await auth.updateUser(uid, {
           displayName: stageName,
           disabled: status === 'SUSPENDED' || status === 'INACTIVE',
         });
       } catch (authErr: any) {
         if (authErr.code === 'auth/user-not-found') {
-          const createdAuth = await adminAuth.createUser({
+          const createdAuth = await auth.createUser({
             email: normalizedEmail,
             emailVerified: true,
             password: password || 'ChenabArtist2026!',
@@ -95,7 +97,7 @@ export async function POST(req: NextRequest) {
           });
           uid = createdAuth.uid;
         } else {
-          throw authErr;
+          console.warn('[Admin Artists] Auth provisioning error:', authErr);
         }
       }
     }
@@ -144,13 +146,13 @@ export async function POST(req: NextRequest) {
       internalNotes: internalNotes || '',
     };
 
-    if (adminDb) {
-      await adminDb.collection('users').doc(uid).set(userProfileData, { merge: true });
-      await adminDb.collection('artists').doc(artistId).set(artistData, { merge: true });
+    if (db) {
+      await db.collection('users').doc(uid).set(userProfileData, { merge: true });
+      await db.collection('artists').doc(artistId).set(artistData, { merge: true });
 
       // Create a welcoming notification for the artist
       const notificationId = `notif-${Date.now()}`;
-      await adminDb.collection('notifications').doc(notificationId).set({
+      await db.collection('notifications').doc(notificationId).set({
         id: notificationId,
         recipientUid: uid,
         userId: uid,

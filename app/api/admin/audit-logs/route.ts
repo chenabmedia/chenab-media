@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb, getAdminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { AuditLogEntry } from '@/types/admin';
 
 export async function GET(req: NextRequest) {
-  const authRes = await verifyServerAuth(req, 'audit.view');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'audit.view');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
     const logs: AuditLogEntry[] = [];
-    const db = adminDb || getAdminDb();
+    const db = getAdminDb();
 
     if (db) {
       const snap = await db

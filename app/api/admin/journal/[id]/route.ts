@@ -9,14 +9,14 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authRes = await verifyServerAuth(req, 'journal.view');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'journal.view');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
-    const db = adminDb || getAdminDb();
+    const db = getAdminDb();
 
     if (db) {
       const docSnap = await db.collection('journal').doc(id).get();
@@ -48,17 +48,17 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authRes = await verifyServerAuth(req, 'journal.edit');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  const db = adminDb || getAdminDb();
-  if (!db) {
-    return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'journal.edit');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Database instance not configured or unavailable' }, { status: 503 });
+    }
+
     const { id } = await params;
     const body = await req.json();
 
@@ -180,17 +180,17 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authRes = await verifyServerAuth(req, 'journal.delete');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  const db = adminDb || getAdminDb();
-  if (!db) {
-    return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'journal.delete');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Database instance not configured or unavailable' }, { status: 503 });
+    }
+
     const { id } = await params;
     const docRef = db.collection('journal').doc(id);
     const snap = await docRef.get();

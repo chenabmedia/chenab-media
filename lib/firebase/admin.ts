@@ -52,6 +52,31 @@ const envCandidatesList = [
   process.env.RAILWAY_FIREBASE_SERVICE_ACCOUNT,
 ];
 
+function getEnvCandidates(): (string | undefined)[] {
+  return [
+    process.env.FIREBASE_SERVICE_ACCOUNT,
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+    process.env.FIREBASE_ADMIN_CREDENTIALS,
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+    process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON,
+    process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    process.env.GCP_SERVICE_ACCOUNT,
+    process.env.FIREBASE_ADMIN_SDK_CONFIG,
+    process.env.FIREBASE_CREDENTIALS,
+    process.env.FIREBASE_CONFIG,
+    process.env.FIREBASE_KEY,
+    process.env.SERVICE_ACCOUNT_KEY,
+    process.env.SERVICE_ACCOUNT_JSON,
+    process.env.GCP_SA_KEY,
+    process.env.GCP_SERVICE_ACCOUNT_KEY,
+    process.env.GOOGLE_CREDENTIALS,
+    process.env.FIREBASE_SERVICE_ACCOUNT_BASE64,
+    process.env.FIREBASE_ADMIN_KEY,
+    process.env.GCP_CREDENTIALS,
+    process.env.RAILWAY_FIREBASE_SERVICE_ACCOUNT,
+  ];
+}
+
 const serviceAccountCandidatePresent = envCandidatesList.some(c => Boolean(c && c.trim()));
 const clientEmailPresent = Boolean(
   process.env.FIREBASE_CLIENT_EMAIL ||
@@ -195,7 +220,8 @@ function parseServiceAccountInput(rawInput: string | undefined): any {
 }
 
 function getServiceAccountCredential() {
-  for (const candidate of envCandidatesList) {
+  const candidates = getEnvCandidates();
+  for (const candidate of candidates) {
     if (!candidate || !candidate.trim()) continue;
     const parsed = parseServiceAccountInput(candidate);
     if (parsed) {
@@ -266,6 +292,12 @@ function getServiceAccountCredential() {
   return undefined;
 }
 
+export function hasAdminCredentials(): boolean {
+  if (credentialParseSuccess) return true;
+  getServiceAccountCredential();
+  return credentialParseSuccess;
+}
+
 let adminAppInstance: App | null = null;
 
 export function initAdminApp(): App | null {
@@ -277,16 +309,33 @@ export function initAdminApp(): App | null {
   try {
     const credential = getServiceAccountCredential();
     if (credential) {
-      adminAppInstance = initializeApp({ credential, projectId });
-      return adminAppInstance;
-    } else {
-      const gCreds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-      if (gCreds && tryReadFs(gCreds)) {
+      try {
+        adminAppInstance = initializeApp({ credential, projectId });
+        return adminAppInstance;
+      } catch (certInitErr) {
+        console.warn('[Firebase Admin] initializeApp with credential failed, attempting fallback:', certInitErr);
+      }
+    }
+
+    const gCreds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    if (gCreds && tryReadFs(gCreds)) {
+      try {
         adminAppInstance = initializeApp({ projectId });
         return adminAppInstance;
-      } else {
-        console.warn('[Firebase Admin] No service account credentials found in environment variables.');
+      } catch (gCredsErr) {
+        console.warn('[Firebase Admin] initializeApp with GOOGLE_APPLICATION_CREDENTIALS failed:', gCredsErr);
       }
+    }
+
+    // Node.js fallback: Initialize with projectId.
+    // In Node.js / Vercel, this enables Firebase Auth ID token verification via Google public keys
+    // and connects Firestore via default environment credentials.
+    try {
+      adminAppInstance = initializeApp({ projectId });
+      console.log('[Firebase Admin] Initialized with projectId fallback:', projectId);
+      return adminAppInstance;
+    } catch (fallbackErr) {
+      console.error('[Firebase Admin] Fallback initialization error:', fallbackErr);
     }
   } catch (error) {
     console.error('[Firebase Admin] SDK initialization error:', error);
@@ -309,12 +358,19 @@ export function getAdminAuth(): Auth | null {
 /**
  * Lazy proxy delegating to getAdminAuth() on first access.
  */
-export const adminAuth: Auth | null = new Proxy({} as Auth, {
+export const adminAuth: Auth = new Proxy({} as Auth, {
   get(_target, prop) {
     const auth = getAdminAuth();
-    if (!auth) return undefined;
-    const val = (auth as any)[prop];
-    return typeof val === 'function' ? val.bind(auth) : val;
+    if (auth) {
+      const val = (auth as any)[prop];
+      return typeof val === 'function' ? val.bind(auth) : val;
+    }
+    if (typeof prop === 'string') {
+      return () => {
+        throw new Error(`Firebase Admin Auth is not initialized. Cannot call ${String(prop)}()`);
+      };
+    }
+    return undefined;
   },
 });
 
@@ -341,12 +397,24 @@ export function getAdminDb(): Firestore | null {
 /**
  * Lazy proxy delegating to getAdminDb() on first access.
  */
-export const adminDb: Firestore | null = new Proxy({} as Firestore, {
+export const adminDb: Firestore = new Proxy({} as Firestore, {
   get(_target, prop) {
     const db = getAdminDb();
-    if (!db) return undefined;
-    const val = (db as any)[prop];
-    return typeof val === 'function' ? val.bind(db) : val;
+    if (db) {
+      const val = (db as any)[prop];
+      return typeof val === 'function' ? val.bind(db) : val;
+    }
+    if (prop === 'collection' || prop === 'doc') {
+      return () => {
+        throw new Error('Firebase Admin Firestore is not initialized. Please configure FIREBASE_SERVICE_ACCOUNT in environment variables.');
+      };
+    }
+    if (typeof prop === 'string') {
+      return () => {
+        throw new Error(`Firebase Admin Firestore is not initialized. Cannot call ${String(prop)}()`);
+      };
+    }
+    return undefined;
   },
 });
 
@@ -366,6 +434,7 @@ export interface FirebaseRuntimeDiagnostics {
 
 export function getAdminDiagnostics(): FirebaseRuntimeDiagnostics {
   const currentApp = getApps().length ? getApp() : null;
+  const saPresent = getEnvCandidates().some(c => Boolean(c && c.trim()));
   return {
     clientFirebaseProjectId: projectId,
     serverAdminProjectId: currentApp?.options?.projectId || projectId,
@@ -374,9 +443,21 @@ export function getAdminDiagnostics(): FirebaseRuntimeDiagnostics {
     adminAppName: currentApp?.name || 'none',
     isInitialized: getApps().length > 0,
     isCloudflareWorker: false,
-    serviceAccountCandidatePresent,
-    clientEmailPresent,
-    privateKeyPresent,
+    serviceAccountCandidatePresent: saPresent,
+    clientEmailPresent: Boolean(
+      process.env.FIREBASE_CLIENT_EMAIL ||
+      process.env.GCP_CLIENT_EMAIL ||
+      process.env.FIREBASE_ADMIN_CLIENT_EMAIL ||
+      process.env.CLIENT_EMAIL ||
+      process.env.SA_CLIENT_EMAIL
+    ),
+    privateKeyPresent: Boolean(
+      process.env.FIREBASE_PRIVATE_KEY ||
+      process.env.GCP_PRIVATE_KEY ||
+      process.env.FIREBASE_ADMIN_PRIVATE_KEY ||
+      process.env.PRIVATE_KEY ||
+      process.env.SA_PRIVATE_KEY
+    ),
     credentialParseSuccess,
   };
 }

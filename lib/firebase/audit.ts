@@ -1,4 +1,4 @@
-import { adminDb } from './admin';
+import { adminDb, getAdminDb } from './admin';
 import { AuditLogEntry } from '@/types/admin';
 
 export interface RecordAuditLogParams {
@@ -75,8 +75,9 @@ export async function recordAuditLog(
   };
 
   try {
-    if (adminDb) {
-      const docRef = await adminDb.collection('auditLogs').add(logData);
+    const db = getAdminDb();
+    if (db) {
+      const docRef = await db.collection('auditLogs').add(logData);
       return docRef.id;
     }
   } catch (error) {

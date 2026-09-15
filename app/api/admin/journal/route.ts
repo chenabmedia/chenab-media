@@ -7,14 +7,14 @@ import { JOURNAL_POSTS } from '@/data/journal';
 import { normalizeJournalPost, slugify } from '@/lib/firebase/serverCatalog';
 
 export async function GET(req: NextRequest) {
-  const authRes = await verifyServerAuth(req, 'journal.view');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'journal.view');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
     const postsList: JournalPost[] = [];
-    const db = adminDb || getAdminDb();
+    const db = getAdminDb();
 
     if (db) {
       const snap = await db.collection('journal').get();
@@ -41,17 +41,17 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authRes = await verifyServerAuth(req, 'journal.create');
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  const db = adminDb || getAdminDb();
-  if (!db) {
-    return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
-  }
-
   try {
+    const authRes = await verifyServerAuth(req, 'journal.create');
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Database instance not configured or unavailable' }, { status: 503 });
+    }
+
     const body = await req.json();
     const {
       title,

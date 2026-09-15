@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: authRes.error || 'Unauthorized: site.manage permission required' }, { status: 403 });
     }
 
-    const db = adminDb || getAdminDb();
+    const db = getAdminDb();
     if (!db) {
       console.warn('[GET /api/admin/site Diagnostics]', {
         route: '/api/admin/site',
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
         adminInitialized: false,
         authVerified: true,
       });
-      return NextResponse.json({ error: 'Firebase Admin SDK is not initialized.' }, { status: 500 });
+      return NextResponse.json({ error: 'Firebase Admin SDK is not initialized.' }, { status: 503 });
     }
 
     const config = await getSiteConfig();
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: authRes.error || 'Unauthorized: site.manage permission required' }, { status: 403 });
     }
 
-    const db = adminDb || getAdminDb();
+    const db = getAdminDb();
     console.log('[POST /api/admin/site Diagnostics]', {
       route: '/api/admin/site',
       method: 'POST',
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!db) {
-      return NextResponse.json({ error: 'Firebase Admin SDK is not initialized.' }, { status: 500 });
+      return NextResponse.json({ error: 'Firebase Admin SDK is not initialized.' }, { status: 503 });
     }
 
     const body = await req.json();

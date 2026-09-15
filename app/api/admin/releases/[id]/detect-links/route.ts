@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb, getAdminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { detectOdesliLinks } from '@/lib/dsp/odesli';
 
 export async function POST(
@@ -54,7 +54,7 @@ export async function POST(
 
   // Optional: check release existence if not creating a new one
   if (id && id !== 'new' && id !== 'draft') {
-    const db = adminDb || getAdminDb();
+    const db = getAdminDb();
     if (db) {
       try {
         let doc = await db.collection('releases').doc(id).get();

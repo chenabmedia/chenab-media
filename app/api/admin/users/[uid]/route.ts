@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminAuth, adminDb } from '@/lib/firebase/admin';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import { UpdateAdminInput } from '@/types/admin';
 import { UserProfile } from '@/types/auth';
@@ -15,15 +15,17 @@ export async function GET(
     return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
   }
 
+  const db = getAdminDb();
+  if (!db) {
+    return NextResponse.json({ error: 'Firestore Admin service unavailable' }, { status: 503 });
+  }
+
   try {
-    if (adminDb) {
-      const docSnap = await adminDb.collection('users').doc(uid).get();
-      if (!docSnap.exists) {
-        return NextResponse.json({ error: 'User profile record not found' }, { status: 404 });
-      }
-      return NextResponse.json({ user: docSnap.data() as UserProfile }, { status: 200 });
+    const docSnap = await db.collection('users').doc(uid).get();
+    if (!docSnap.exists) {
+      return NextResponse.json({ error: 'User profile record not found' }, { status: 404 });
     }
-    return NextResponse.json({ error: 'Firestore Admin unavailable' }, { status: 500 });
+    return NextResponse.json({ user: docSnap.data() as UserProfile }, { status: 200 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Error retrieving user profile' }, { status: 500 });
   }
@@ -37,6 +39,11 @@ export async function PUT(
   const authRes = await verifyServerAuth(req, 'admins.edit');
   if (!authRes.authenticated || !authRes.profile) {
     return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+  }
+
+  const db = getAdminDb();
+  if (!db) {
+    return NextResponse.json({ error: 'Firestore Admin service unavailable' }, { status: 503 });
   }
 
   try {
@@ -55,17 +62,11 @@ export async function PUT(
     }
 
     // Fetch existing target profile
-    let existingProfile: UserProfile | null = null;
-    if (adminDb) {
-      const snap = await adminDb.collection('users').doc(uid).get();
-      if (snap.exists) {
-        existingProfile = snap.data() as UserProfile;
-      }
-    }
-
-    if (!existingProfile) {
+    const snap = await db.collection('users').doc(uid).get();
+    if (!snap.exists) {
       return NextResponse.json({ error: 'Target user record not found' }, { status: 404 });
     }
+    const existingProfile = snap.data() as UserProfile;
 
     const SUPER_ADMIN_EMAIL = 'zaazze@chenabmedia.in';
     const isTargetSuperAdmin = existingProfile.email.toLowerCase() === SUPER_ADMIN_EMAIL;
@@ -103,7 +104,8 @@ export async function PUT(
     const permissionsChanged = JSON.stringify(existingProfile.permissions || []) !== JSON.stringify(permissions || []);
 
     // Update Firebase Auth if available
-    if (adminAuth) {
+    const auth = getAdminAuth();
+    if (auth) {
       try {
         const updateAuthPayload: { email?: string; displayName?: string; disabled?: boolean } = {
           displayName,
@@ -114,7 +116,7 @@ export async function PUT(
           updateAuthPayload.email = normalizedEmail;
         }
 
-        await adminAuth.updateUser(uid, updateAuthPayload);
+        await auth.updateUser(uid, updateAuthPayload);
       } catch (authErr: any) {
         console.error('Failed to sync Auth user update:', authErr);
         return NextResponse.json(
@@ -135,9 +137,7 @@ export async function PUT(
       updatedAt: now,
     };
 
-    if (adminDb) {
-      await adminDb.collection('users').doc(uid).set(updatedProfile, { merge: true });
-    }
+    await db.collection('users').doc(uid).set(updatedProfile, { merge: true });
 
     // Determine audit action type
     let auditAction: any = 'ADMIN_UPDATED';
@@ -172,35 +172,37 @@ export async function DELETE(
     return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
   }
 
+  const db = getAdminDb();
+  if (!db) {
+    return NextResponse.json({ error: 'Firestore Admin service unavailable' }, { status: 503 });
+  }
+
   try {
     if (authRes.profile.uid === uid) {
       return NextResponse.json({ error: 'You cannot disable or revoke your own active admin account.' }, { status: 400 });
     }
 
-    if (adminDb) {
-      const snap = await adminDb.collection('users').doc(uid).get();
-      if (snap.exists) {
-        const targetEmail = (snap.data() as UserProfile).email.toLowerCase();
-        if (targetEmail === 'zaazze@chenabmedia.in') {
-          return NextResponse.json(
-            { error: 'The super admin account (zaazze@chenabmedia.in) is protected and cannot be deleted or disabled.' },
-            { status: 400 }
-          );
-        }
+    const snap = await db.collection('users').doc(uid).get();
+    if (snap.exists) {
+      const targetEmail = (snap.data() as UserProfile).email.toLowerCase();
+      if (targetEmail === 'zaazze@chenabmedia.in') {
+        return NextResponse.json(
+          { error: 'The super admin account (zaazze@chenabmedia.in) is protected and cannot be deleted or disabled.' },
+          { status: 400 }
+        );
       }
     }
 
-    if (adminAuth) {
-      await adminAuth.updateUser(uid, { disabled: true });
+    const auth = getAdminAuth();
+    if (auth) {
+      await auth.updateUser(uid, { disabled: true });
     }
 
     const now = new Date().toISOString();
-    if (adminDb) {
-      await adminDb.collection('users').doc(uid).update({
-        status: 'DISABLED',
-        updatedAt: now,
-      });
-    }
+    await db.collection('users').doc(uid).update({
+      status: 'DISABLED',
+      updatedAt: now,
+    });
 
     await recordAuditLog(
       { uid: authRes.profile.uid, name: authRes.profile.displayName || undefined, email: authRes.profile.email },

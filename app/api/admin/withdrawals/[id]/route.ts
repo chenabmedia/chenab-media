@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { sendTemplateEmail } from '@/lib/email/service';
 import { recordAuditLog } from '@/lib/firebase/audit';
 
@@ -8,18 +8,21 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const authRes = await verifyServerAuth(req);
-  if (!authRes.authenticated || !authRes.profile) {
-    return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
-  }
-
-  if (!adminDb) {
-    return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
-  }
-
+  let withdrawalId = 'unknown';
   try {
-    const docRef = adminDb.collection('withdrawals').doc(id);
+    const { id } = await params;
+    withdrawalId = id;
+    const authRes = await verifyServerAuth(req);
+    if (!authRes.authenticated || !authRes.profile) {
+      return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Database instance not configured or unavailable' }, { status: 503 });
+    }
+
+    const docRef = db.collection('withdrawals').doc(id);
     const snap = await docRef.get();
     if (!snap.exists) {
       return NextResponse.json({ error: 'Withdrawal record not found' }, { status: 404 });
@@ -156,7 +159,7 @@ export async function PATCH(
       resendId: emailResult.resendId,
     });
   } catch (err: any) {
-    console.error(`Error updating withdrawal ${id}:`, err);
+    console.error(`Error updating withdrawal ${withdrawalId}:`, err);
     return NextResponse.json({ error: err.message || 'Failed to update withdrawal' }, { status: 500 });
   }
 }

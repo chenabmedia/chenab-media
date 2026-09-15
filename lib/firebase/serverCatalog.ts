@@ -1,4 +1,4 @@
-import { adminDb, getAdminDb } from './admin';
+import { getAdminDb, hasAdminCredentials } from './admin';
 import appletConfig from '@/firebase-applet-config.json';
 import { Artist, Release, SmartLink, JournalPost } from '@/types';
 import { JOURNAL_POSTS } from '@/data/journal';
@@ -130,19 +130,21 @@ export function normalizeRelease(raw: any, docId: string): Release {
  * Fetches all public artists from Firestore (using adminDb/getAdminDb with REST fallback)
  */
 export async function getPublicArtists(): Promise<Artist[]> {
-  const db = adminDb || getAdminDb();
-  if (db) {
-    try {
-      const snap = await db.collection('artists').get();
-      if (!snap.empty) {
-        const artists: Artist[] = [];
-        snap.forEach((doc) => {
-          artists.push(normalizeArtist(doc.data(), doc.id));
-        });
-        return artists;
+  if (hasAdminCredentials()) {
+    const db = getAdminDb();
+    if (db) {
+      try {
+        const snap = await db.collection('artists').get();
+        if (!snap.empty) {
+          const artists: Artist[] = [];
+          snap.forEach((doc) => {
+            artists.push(normalizeArtist(doc.data(), doc.id));
+          });
+          return artists;
+        }
+      } catch (e: any) {
+        // Fallback to REST API on any Admin DB error
       }
-    } catch (e: any) {
-      console.warn('ServerCatalog: Firestore Admin artists query error:', e?.message || e);
     }
   }
 
@@ -167,7 +169,7 @@ export async function getPublicArtists(): Promise<Artist[]> {
       }
     }
   } catch (err: any) {
-    console.warn('ServerCatalog: Firestore REST artists error:', err?.message || err);
+    // Silently continue
   }
 
   // Return empty array if Firestore has no artists or is unreachable (never return stale demo data)
@@ -196,34 +198,36 @@ export async function getPublicArtistBySlug(slug: string): Promise<Artist | null
  * Fetches all public releases from Firestore
  */
 export async function getPublicReleases(): Promise<Release[]> {
-  const db = adminDb || getAdminDb();
-  if (db) {
-    try {
-      const snap = await db.collection('releases').get();
-      if (!snap.empty) {
-        const releases: Release[] = [];
-        snap.forEach((doc) => {
-          const raw = doc.data();
-          const normalized = normalizeRelease(raw, doc.id);
-          // Only show published / out now releases on public views
-          if (
-            normalized.status === 'PUBLISHED' ||
-            normalized.status === 'OUT NOW' ||
-            normalized.status === 'PRE-ORDER' ||
-            !normalized.status
-          ) {
-            releases.push(normalized);
-          }
-        });
+  if (hasAdminCredentials()) {
+    const db = getAdminDb();
+    if (db) {
+      try {
+        const snap = await db.collection('releases').get();
+        if (!snap.empty) {
+          const releases: Release[] = [];
+          snap.forEach((doc) => {
+            const raw = doc.data();
+            const normalized = normalizeRelease(raw, doc.id);
+            // Only show published / out now releases on public views
+            if (
+              normalized.status === 'PUBLISHED' ||
+              normalized.status === 'OUT NOW' ||
+              normalized.status === 'PRE-ORDER' ||
+              !normalized.status
+            ) {
+              releases.push(normalized);
+            }
+          });
 
-        if (releases.length > 0) {
-          // Sort newest first
-          releases.sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
-          return releases;
+          if (releases.length > 0) {
+            // Sort newest first
+            releases.sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
+            return releases;
+          }
         }
+      } catch (e: any) {
+        // Fallback to REST API on any Admin DB error
       }
-    } catch (e: any) {
-      console.warn('ServerCatalog: Firestore Admin releases query error:', e?.message || e);
     }
   }
 
@@ -262,7 +266,7 @@ export async function getPublicReleases(): Promise<Release[]> {
       }
     }
   } catch (err: any) {
-    console.warn('ServerCatalog: Firestore REST releases error:', err?.message || err);
+    // Silently continue
   }
 
   // Return empty array if Firestore has no published releases or is unreachable (never return stale demo data)
@@ -341,30 +345,31 @@ export function normalizeJournalPost(raw: any, docId: string): JournalPost {
  * Fetches all published journal posts from Firestore with fallback to static JOURNAL_POSTS
  */
 export async function getPublicJournalPosts(): Promise<JournalPost[]> {
-  const db = adminDb || getAdminDb();
+  if (hasAdminCredentials()) {
+    const db = getAdminDb();
+    if (db) {
+      try {
+        const snap = await db.collection('journal').get();
+        if (!snap.empty) {
+          const posts: JournalPost[] = [];
+          snap.forEach((doc) => {
+            const raw = doc.data();
+            const normalized = normalizeJournalPost(raw, doc.id);
+            // Only show published articles on public views
+            if (normalized.status === 'PUBLISHED' || !normalized.status) {
+              posts.push(normalized);
+            }
+          });
 
-  if (db) {
-    try {
-      const snap = await db.collection('journal').get();
-      if (!snap.empty) {
-        const posts: JournalPost[] = [];
-        snap.forEach((doc) => {
-          const raw = doc.data();
-          const normalized = normalizeJournalPost(raw, doc.id);
-          // Only show published articles on public views
-          if (normalized.status === 'PUBLISHED' || !normalized.status) {
-            posts.push(normalized);
+          if (posts.length > 0) {
+            // Sort newest first by date
+            posts.sort((a, b) => new Date(b.date || b.publishedAt || '').getTime() - new Date(a.date || a.publishedAt || '').getTime());
+            return posts;
           }
-        });
-
-        if (posts.length > 0) {
-          // Sort newest first by date
-          posts.sort((a, b) => new Date(b.date || b.publishedAt || '').getTime() - new Date(a.date || a.publishedAt || '').getTime());
-          return posts;
         }
+      } catch (e: any) {
+        // Fallback to REST API on any Admin DB error
       }
-    } catch (e: any) {
-      console.warn('ServerCatalog: Firestore Admin journal query error:', e?.message || e);
     }
   }
 
@@ -398,7 +403,7 @@ export async function getPublicJournalPosts(): Promise<JournalPost[]> {
       }
     }
   } catch (err: any) {
-    console.warn('ServerCatalog: Firestore REST journal error:', err?.message || err);
+    // Silently continue
   }
 
   // Fallback to static JOURNAL_POSTS formatted

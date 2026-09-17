@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
 import { adminAuth, adminDb, getAdminDb, getAdminAuth } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
+import { ARTISTS } from '@/data/artists';
 
 export async function GET(
   req: NextRequest,
@@ -28,22 +29,49 @@ export async function GET(
       }
     }
 
-    if (!artistDoc.exists) {
-      return NextResponse.json({ error: 'Artist record not found' }, { status: 404 });
-    }
+    if (artistDoc.exists) {
+      const artistData: any = { ...artistDoc.data(), id: artistDoc.id };
 
-    const artistData: any = { ...artistDoc.data(), id: artistDoc.id };
-
-    // Also fetch associated user account
-    let userAccount: any = null;
-    if (artistData.userId) {
-      const userDoc = await db.collection('users').doc(artistData.userId).get();
-      if (userDoc.exists) {
-        userAccount = userDoc.data();
+      // Also fetch associated user account
+      let userAccount: any = null;
+      if (artistData.userId) {
+        const userDoc = await db.collection('users').doc(artistData.userId).get();
+        if (userDoc.exists) {
+          userAccount = userDoc.data();
+        }
       }
+
+      return NextResponse.json({ artist: artistData, userAccount }, { status: 200 });
     }
 
-    return NextResponse.json({ artist: artistData, userAccount }, { status: 200 });
+    // Static catalog fallback (read-only, no write to Firestore on GET)
+    const staticArtist = ARTISTS.find((a) => a.id === id || a.slug === id);
+    if (staticArtist) {
+      const artistData = {
+        ...staticArtist,
+        id: staticArtist.id,
+        stageName: staticArtist.name,
+        name: staticArtist.name,
+        legalName: (staticArtist as any).legalName || '',
+        email: (staticArtist as any).email || '',
+        phone: (staticArtist as any).phone || '',
+        profileImage: staticArtist.image || '',
+        image: staticArtist.image || '',
+        coverImage: (staticArtist as any).coverImage || '',
+        bio: staticArtist.bio || '',
+        location: staticArtist.location || '',
+        genres: staticArtist.genres || [],
+        status: staticArtist.status || 'ACTIVE',
+        catalogueNumberPrefix: (staticArtist as any).catalogueNumberPrefix || staticArtist.id || '',
+        socialLinks: staticArtist.socialLinks || {},
+        streamingLinks: staticArtist.streamingLinks || {},
+        releaseIds: staticArtist.releaseIds || [],
+        internalNotes: (staticArtist as any).internalNotes || '',
+      };
+      return NextResponse.json({ artist: artistData, userAccount: null }, { status: 200 });
+    }
+
+    return NextResponse.json({ error: 'Artist record not found' }, { status: 404 });
   } catch (err: any) {
     console.error(`Error fetching artist:`, err);
     return NextResponse.json({ error: err.message || 'Failed to fetch artist details' }, { status: 500 });
@@ -79,12 +107,75 @@ export async function PATCH(
       }
     }
 
+    const now = new Date().toISOString();
+
     if (!artistDoc.exists) {
-      return NextResponse.json({ error: 'Artist record not found' }, { status: 404 });
+      // Check if it exists in the static catalog for initial migration-on-save
+      const staticArtist = ARTISTS.find((a) => a.id === id || a.slug === id);
+      if (!staticArtist) {
+        return NextResponse.json({ error: 'Artist record not found' }, { status: 404 });
+      }
+
+      const docId = staticArtist.id || id;
+      artistRef = db.collection('artists').doc(docId);
+
+      const stageNameVal = body.stageName || staticArtist.name;
+      const profileImageVal = body.profileImage || staticArtist.image || '';
+
+      const newArtistData: Record<string, any> = {
+        slug: staticArtist.slug || id,
+        stageName: stageNameVal,
+        name: stageNameVal,
+        legalName: body.legalName !== undefined ? body.legalName : ((staticArtist as any).legalName || ''),
+        email: body.email !== undefined ? body.email : ((staticArtist as any).email || ''),
+        phone: body.phone !== undefined ? body.phone : ((staticArtist as any).phone || ''),
+        profileImage: profileImageVal,
+        image: profileImageVal,
+        coverImage: body.coverImage !== undefined ? body.coverImage : ((staticArtist as any).coverImage || ''),
+        bio: body.bio !== undefined ? body.bio : (staticArtist.bio || ''),
+        location: body.location !== undefined ? body.location : (staticArtist.location || ''),
+        genres: body.genres !== undefined ? body.genres : (staticArtist.genres || []),
+        catalogueNumberPrefix: body.catalogueNumberPrefix !== undefined ? body.catalogueNumberPrefix : ((staticArtist as any).catalogueNumberPrefix || docId),
+        status: body.status !== undefined ? body.status : (staticArtist.status || 'ACTIVE'),
+        socialLinks: body.socialLinks !== undefined ? body.socialLinks : (staticArtist.socialLinks || {}),
+        streamingLinks: body.streamingLinks !== undefined ? body.streamingLinks : (staticArtist.streamingLinks || {}),
+        releaseIds: staticArtist.releaseIds || [],
+        internalNotes: body.internalNotes !== undefined ? body.internalNotes : ((staticArtist as any).internalNotes || ''),
+        createdAt: now,
+        ...body,
+        id: docId,
+        updatedAt: now,
+      };
+
+      if (body.stageName) {
+        newArtistData.name = body.stageName;
+        newArtistData.stageName = body.stageName;
+      }
+      if (body.profileImage) {
+        newArtistData.image = body.profileImage;
+        newArtistData.profileImage = body.profileImage;
+      }
+
+      await artistRef.set(newArtistData);
+
+      // Record Audit Log
+      await recordAuditLog(
+        { uid: authRes.profile.uid, name: authRes.profile.displayName || undefined, email: authRes.profile.email },
+        'ARTIST_MODIFIED',
+        'artist',
+        docId,
+        `Migrated static artist "${stageNameVal}" (${docId}) to Firestore on initial save.`,
+        { artistId: docId, updatedFields: Object.keys(body), migratedFromStatic: true }
+      );
+
+      const createdDoc = await artistRef.get();
+      return NextResponse.json(
+        { success: true, artist: { ...createdDoc.data(), id: createdDoc.id } },
+        { status: 200 }
+      );
     }
 
     const currentArtist = artistDoc.data();
-    const now = new Date().toISOString();
 
     const updateData: Record<string, any> = {
       ...body,
@@ -169,12 +260,29 @@ export async function DELETE(
       }
     }
 
+    const now = new Date().toISOString();
+
     if (!artistDoc.exists) {
-      return NextResponse.json({ error: 'Artist record not found' }, { status: 404 });
+      const staticArtist = ARTISTS.find((a) => a.id === id || a.slug === id);
+      if (staticArtist) {
+        const docId = staticArtist.id || id;
+        artistRef = db.collection('artists').doc(docId);
+        await artistRef.set(
+          {
+            ...staticArtist,
+            id: docId,
+            status: 'SUSPENDED',
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+        artistDoc = await artistRef.get();
+      } else {
+        return NextResponse.json({ error: 'Artist record not found' }, { status: 404 });
+      }
     }
 
     const artistData = artistDoc.data();
-    const now = new Date().toISOString();
 
     // Mark status as SUSPENDED / DISABLED in Firestore
     await artistRef.set({ status: 'SUSPENDED', updatedAt: now }, { merge: true });
@@ -201,7 +309,7 @@ export async function DELETE(
       'ARTIST_MODIFIED',
       'artist',
       artistRef.id,
-      `Suspended artist account "${artistData?.stageName}" (${artistRef.id}) and disabled associated auth credentials.`,
+      `Suspended artist account "${artistData?.stageName || artistData?.name}" (${artistRef.id}) and disabled associated auth credentials.`,
       { artistId: artistRef.id, status: 'SUSPENDED' }
     );
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb, getAdminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import { Release, ReleaseStatus, ReleaseType } from '@/types';
 
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ releases: releasesList }, { status: 200 });
   } catch (err: any) {
     console.error('Error fetching admin releases:', err);
-    return NextResponse.json({ error: err.message || 'Failed to fetch releases' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch releases' }, { status: 500 });
   }
 }
 
@@ -276,6 +276,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (err: any) {
     console.error('Error creating release:', err);
-    return NextResponse.json({ error: err.message || 'Failed to create release' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create release' }, { status: 500 });
   }
 }

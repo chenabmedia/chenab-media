@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
+import { hasPermission, AdminPermission } from '@/lib/auth/permissions';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { sendTemplateEmail } from '@/lib/email/service';
 import { recordAuditLog } from '@/lib/firebase/audit';
@@ -36,6 +37,50 @@ export async function PATCH(
       return NextResponse.json(
         { error: 'Invalid status. Expected APPROVED, REJECTED, or PAID.' },
         { status: 400 }
+      );
+    }
+
+    // State Machine Transition Enforcement
+    if (existing.status === 'PAID') {
+      return NextResponse.json(
+        { error: 'A settled/paid withdrawal is terminal and cannot undergo further status transitions.' },
+        { status: 400 }
+      );
+    }
+
+    if (status === 'APPROVED' && existing.status !== 'PENDING') {
+      return NextResponse.json(
+        { error: `Cannot approve withdrawal with current status "${existing.status}". Only PENDING withdrawals can be approved.` },
+        { status: 400 }
+      );
+    }
+
+    if (status === 'REJECTED' && existing.status !== 'PENDING') {
+      return NextResponse.json(
+        { error: `Cannot reject withdrawal with current status "${existing.status}". Only PENDING withdrawals can be rejected.` },
+        { status: 400 }
+      );
+    }
+
+    if (status === 'PAID' && existing.status !== 'APPROVED') {
+      return NextResponse.json(
+        { error: `Cannot mark withdrawal as PAID with current status "${existing.status}". Withdrawal must be APPROVED prior to payout settlement.` },
+        { status: 400 }
+      );
+    }
+
+    // Permission enforcement based on action
+    const requiredPerm: AdminPermission =
+      status === 'APPROVED'
+        ? 'withdrawals.approve'
+        : status === 'REJECTED'
+        ? 'withdrawals.reject'
+        : 'withdrawals.markPaid';
+
+    if (authRes.profile.role !== 'admin' && !hasPermission(authRes.profile, requiredPerm)) {
+      return NextResponse.json(
+        { error: `Insufficient permissions: Requires ${requiredPerm}` },
+        { status: 403 }
       );
     }
 
@@ -160,6 +205,6 @@ export async function PATCH(
     });
   } catch (err: any) {
     console.error(`Error updating withdrawal ${withdrawalId}:`, err);
-    return NextResponse.json({ error: err.message || 'Failed to update withdrawal' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update withdrawal' }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { sendTemplateEmail } from '@/lib/email/service';
@@ -6,7 +7,7 @@ import { recordAuditLog } from '@/lib/firebase/audit';
 
 export async function POST(req: NextRequest) {
   try {
-    const authRes = await verifyServerAuth(req);
+    const authRes = await verifyServerAuth(req, 'agreements.create');
     if (!authRes.authenticated || !authRes.profile) {
       return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
     }
@@ -21,7 +22,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const agreementId = `AGR-${Date.now().toString(36).toUpperCase()}`;
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Firestore Admin service unavailable' }, { status: 503 });
+    }
+
+    const agreementId = `AGR-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(8).toString('hex').toUpperCase()}`;
     const now = new Date();
     const expiryDate = new Date(now.getTime() + (expiryDays || 14) * 24 * 60 * 60 * 1000).toISOString();
 
@@ -37,10 +43,7 @@ export async function POST(req: NextRequest) {
       issuedBy: authRes.profile.uid,
     };
 
-    const db = getAdminDb();
-    if (db) {
-      await db.collection('agreements').doc(agreementId).set(agreementData);
-    }
+    await db.collection('agreements').doc(agreementId).set(agreementData);
 
     // Trigger template email: ArtistAgreement
     const emailResult = await sendTemplateEmail({
@@ -86,6 +89,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (err: any) {
     console.error('Error issuing agreement:', err);
-    return NextResponse.json({ error: err.message || 'Failed to issue agreement' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to issue agreement' }, { status: 500 });
   }
 }

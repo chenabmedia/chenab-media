@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb, getAdminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import { JournalPost } from '@/types';
 import { JOURNAL_POSTS } from '@/data/journal';
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ posts: postsList }, { status: 200 });
   } catch (err: any) {
     console.error('Error fetching admin journal entries:', err);
-    return NextResponse.json({ error: err.message || 'Failed to fetch journal entries' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch journal entries' }, { status: 500 });
   }
 }
 
@@ -143,6 +143,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ post: createdPost, id: docRef.id }, { status: 201 });
   } catch (err: any) {
     console.error('Error creating journal post:', err);
-    return NextResponse.json({ error: err.message || 'Failed to create journal entry' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create journal entry' }, { status: 500 });
   }
 }

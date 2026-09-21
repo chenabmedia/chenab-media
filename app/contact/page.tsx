@@ -12,6 +12,7 @@ export default function ContactPage() {
     department: 'General Enquiries',
     subject: '',
     message: '',
+    website_confirm: '',
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,15 +38,25 @@ export default function ContactPage() {
         body: JSON.stringify(formData),
       });
 
+      const resData = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        // Fallback simulation for offline/preview
-        await new Promise((resolve) => setTimeout(resolve, 800));
+        if (res.status === 429) {
+          showToast(resData.error || 'Too many submissions. Please try again later.', 'error');
+          return;
+        }
+        if (res.status === 400) {
+          showToast(resData.error || 'Please review form fields and try again.', 'error');
+          return;
+        }
+        showToast(resData.error || 'Failed to submit enquiry. Please try again later.', 'error');
+        return;
       }
+
       setIsSubmitted(true);
       showToast('Enquiry successfully dispatched to CHENAB team.', 'success');
     } catch {
-      setIsSubmitted(true);
-      showToast('Enquiry recorded successfully.', 'success');
+      showToast('Network error while dispatching enquiry. Please try again.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -143,6 +154,7 @@ export default function ContactPage() {
                     department: 'General Enquiries',
                     subject: '',
                     message: '',
+                    website_confirm: '',
                   });
                 }}
                 className="px-6 py-3.5 min-h-[48px] bg-[#F5F5F5] text-[#080808] font-mono text-xs font-bold uppercase inline-flex items-center justify-center"
@@ -152,6 +164,33 @@ export default function ContactPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+              {/* Invisible Honeypot Anti-Spam Field */}
+              <div
+                aria-hidden="true"
+                style={{
+                  opacity: 0,
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  height: 0,
+                  width: 0,
+                  zIndex: -1,
+                  overflow: 'hidden',
+                  pointerEvents: 'none',
+                }}
+              >
+                <label htmlFor="contact_website_confirm">Website Confirmation</label>
+                <input
+                  id="contact_website_confirm"
+                  type="text"
+                  name="website_confirm"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={formData.website_confirm}
+                  onChange={(e) => setFormData({ ...formData, website_confirm: e.target.value })}
+                />
+              </div>
+
               <h3 className="font-mono text-xs text-[#F5F5F5] tracking-widest uppercase border-b border-[#1C1C1C] pb-3">
                 ENQUIRY FORM
               </h3>

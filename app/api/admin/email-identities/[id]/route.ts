@@ -5,8 +5,9 @@ import { recordAuditLog } from '@/lib/firebase/audit';
 import { EmailIdentity } from '@/types/site';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
-    const authRes = await verifyServerAuth(req);
+    const authRes = await verifyServerAuth(req, 'email.identities.manage');
     if (!authRes.authenticated || !authRes.profile) {
       return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
     }
@@ -16,7 +17,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
     }
 
-    const { id } = await params;
     let identity: EmailIdentity | null = null;
 
     const snap = await db.collection('emailIdentities').doc(id).get();
@@ -30,11 +30,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ identity });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to fetch email identity' }, { status: 500 });
+    console.error(`Error in GET /api/admin/email-identities/${id}:`, error);
+    return NextResponse.json({ error: 'Failed to fetch email identity' }, { status: 500 });
   }
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const authRes = await verifyServerAuth(req, 'email.identities.manage');
     if (!authRes.authenticated || !authRes.profile) {
@@ -46,7 +48,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
     }
 
-    const { id } = await params;
     const body = await req.json();
     const { displayName, replyTo, description, enabled } = body;
 
@@ -73,11 +74,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to update email identity' }, { status: 500 });
+    console.error(`Error in PUT /api/admin/email-identities/${id}:`, error);
+    return NextResponse.json({ error: 'Failed to update email identity' }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const authRes = await verifyServerAuth(req, 'email.identities.manage');
     if (!authRes.authenticated || !authRes.profile) {
@@ -88,8 +91,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!db) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
     }
-
-    const { id } = await params;
 
     await db.collection('emailIdentities').doc(id).delete();
 
@@ -105,6 +106,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to delete email identity' }, { status: 500 });
+    console.error(`Error in DELETE /api/admin/email-identities/${id}:`, error);
+    return NextResponse.json({ error: 'Failed to delete email identity' }, { status: 500 });
   }
 }

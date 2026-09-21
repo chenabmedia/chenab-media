@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminAuth, adminDb, getAdminDb, getAdminAuth } from '@/lib/firebase/admin';
+import { getAdminDb, getAdminAuth } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
 
 export async function GET(req: NextRequest) {
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ artists: artistsList }, { status: 200 });
   } catch (err: any) {
     console.error('Error fetching admin artists:', err);
-    return NextResponse.json({ error: err.message || 'Failed to fetch artists' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch artists' }, { status: 500 });
   }
 }
 
@@ -60,22 +61,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
     const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Firestore Admin service unavailable' }, { status: 503 });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
     const auth = getAdminAuth();
 
     // Check duplicate email
-    if (db) {
-      const existingDocSnap = await db.collection('users').where('email', '==', normalizedEmail).get();
-      if (!existingDocSnap.empty) {
-        return NextResponse.json(
-          { error: `An account with email address ${normalizedEmail} already exists in the system.` },
-          { status: 400 }
-        );
-      }
+    const existingDocSnap = await db.collection('users').where('email', '==', normalizedEmail).get();
+    if (!existingDocSnap.empty) {
+      return NextResponse.json(
+        { error: `An account with email address ${normalizedEmail} already exists in the system.` },
+        { status: 400 }
+      );
     }
 
     let uid = `user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const temporaryPassword = password && password.trim() ? password.trim() : `Chn!${crypto.randomBytes(12).toString('base64url')}`;
 
     // Provision in Firebase Auth if available
     if (auth) {
@@ -91,7 +95,7 @@ export async function POST(req: NextRequest) {
           const createdAuth = await auth.createUser({
             email: normalizedEmail,
             emailVerified: true,
-            password: password || 'ChenabArtist2026!',
+            password: temporaryPassword,
             displayName: stageName,
             disabled: status === 'SUSPENDED' || status === 'INACTIVE',
           });
@@ -146,25 +150,23 @@ export async function POST(req: NextRequest) {
       internalNotes: internalNotes || '',
     };
 
-    if (db) {
-      await db.collection('users').doc(uid).set(userProfileData, { merge: true });
-      await db.collection('artists').doc(artistId).set(artistData, { merge: true });
+    await db.collection('users').doc(uid).set(userProfileData, { merge: true });
+    await db.collection('artists').doc(artistId).set(artistData, { merge: true });
 
-      // Create a welcoming notification for the artist
-      const notificationId = `notif-${Date.now()}`;
-      await db.collection('notifications').doc(notificationId).set({
-        id: notificationId,
-        recipientUid: uid,
-        userId: uid,
-        artistId,
-        title: 'WELCOME TO CHENAB MEDIA',
-        message: `Your artist roster account (${stageName}) has been provisioned. Access your profile, catalog releases, and updates here.`,
-        type: 'SYSTEM',
-        read: false,
-        createdAt: now,
-        link: '/artist/profile',
-      });
-    }
+    // Create a welcoming notification for the artist
+    const notificationId = `notif-${Date.now()}`;
+    await db.collection('notifications').doc(notificationId).set({
+      id: notificationId,
+      recipientUid: uid,
+      userId: uid,
+      artistId,
+      title: 'WELCOME TO CHENAB MEDIA',
+      message: `Your artist roster account (${stageName}) has been provisioned. Access your profile, catalog releases, and updates here.`,
+      type: 'SYSTEM',
+      read: false,
+      createdAt: now,
+      link: '/artist/profile',
+    });
 
     // Trigger template email: ArtistWelcome
     const { sendTemplateEmail } = await import('@/lib/email/service');
@@ -177,7 +179,7 @@ export async function POST(req: NextRequest) {
         artistStageName: stageName,
         artistId,
         artistEmail: normalizedEmail,
-        temporaryPassword: password || 'ChenabArtist2026!',
+        temporaryPassword,
         loginLink: 'https://chenabmedia.in/login',
         supportEmail: 'artists@chenabmedia.in',
         supportPhone: '+1 (800) 555-CHENAB',
@@ -210,6 +212,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (err: any) {
     console.error('Error creating artist:', err);
-    return NextResponse.json({ error: err.message || 'Failed to create artist' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create artist' }, { status: 500 });
   }
 }

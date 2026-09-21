@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb, getAdminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import { normalizeJournalPost, slugify } from '@/lib/firebase/serverCatalog';
 import { JOURNAL_POSTS } from '@/data/journal';
@@ -40,7 +40,7 @@ export async function GET(
     return NextResponse.json({ error: 'Journal entry not found' }, { status: 404 });
   } catch (err: any) {
     console.error('Error fetching admin journal entry:', err);
-    return NextResponse.json({ error: err.message || 'Failed to fetch journal entry' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch journal entry' }, { status: 500 });
   }
 }
 
@@ -172,7 +172,7 @@ export async function PATCH(
     return NextResponse.json({ post: finalPost, message: 'Journal post updated successfully' }, { status: 200 });
   } catch (err: any) {
     console.error('Error updating journal post:', err);
-    return NextResponse.json({ error: err.message || 'Failed to update journal entry' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update journal entry' }, { status: 500 });
   }
 }
 
@@ -217,6 +217,6 @@ export async function DELETE(
     return NextResponse.json({ success: true, message: `Journal entry "${title}" deleted.` }, { status: 200 });
   } catch (err: any) {
     console.error('Error deleting journal post:', err);
-    return NextResponse.json({ error: err.message || 'Failed to delete journal entry' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to delete journal entry' }, { status: 500 });
   }
 }

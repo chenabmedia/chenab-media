@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ logs });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to fetch email logs' }, { status: 500 });
+    console.error('Error in GET /api/admin/email/logs:', error);
+    return NextResponse.json({ error: 'Failed to fetch email logs' }, { status: 500 });
   }
 }

@@ -22,25 +22,25 @@ export function ArtistSidebar() {
       label: 'OVERVIEW',
       href: '/artist',
       icon: LayoutDashboard,
-      active: pathname === '/artist',
+      active: pathname && pathname === '/artist',
     },
     {
       label: 'MY PROFILE',
       href: '/artist/profile',
       icon: User,
-      active: pathname === '/artist/profile',
+      active: pathname && pathname === '/artist/profile',
     },
     {
       label: 'MY RELEASES',
       href: '/artist/releases',
       icon: Disc,
-      active: pathname.startsWith('/artist/releases'),
+      active: Boolean(pathname?.startsWith('/artist/releases')),
     },
     {
       label: 'NOTIFICATIONS',
       href: '/artist/notifications',
       icon: Bell,
-      active: pathname === '/artist/notifications',
+      active: pathname && pathname === '/artist/notifications',
     },
   ];
 

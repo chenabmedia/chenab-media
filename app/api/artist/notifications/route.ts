@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 
 export async function GET(req: NextRequest) {
   const authRes = await verifyServerAuth(req);
@@ -12,9 +12,10 @@ export async function GET(req: NextRequest) {
 
   try {
     let notificationsList: any[] = [];
+    const db = getAdminDb();
 
-    if (adminDb) {
-      const snap = await adminDb.collection('notifications').get();
+    if (db) {
+      const snap = await db.collection('notifications').get();
       snap.forEach((doc) => {
         const data = doc.data();
         if (data.recipientUid === uid || data.userId === uid || (artistId && data.artistId === artistId)) {
@@ -47,6 +48,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ notifications: notificationsList }, { status: 200 });
   } catch (err: any) {
     console.error('Error fetching notifications:', err);
-    return NextResponse.json({ error: err.message || 'Failed to fetch notifications' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
   }
 }

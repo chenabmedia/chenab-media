@@ -96,15 +96,12 @@ export async function verifyServerAuth(
         }
       }
     } else if (!profile) {
-      profile = {
-        uid,
-        email,
-        displayName: email.split('@')[0],
-        photoURL: null,
-        role: 'artist',
-        status: 'ACTIVE',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+      // Fail closed: Missing Firestore profile for non-superadmin accounts is denied
+      return {
+        authenticated: false,
+        user: { uid, email },
+        profile: null,
+        error: 'User profile record not found in database. Access denied.',
       };
     }
 

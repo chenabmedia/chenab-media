@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 
 export async function PATCH(
   req: NextRequest,
@@ -15,11 +15,12 @@ export async function PATCH(
   const { id } = await params;
 
   try {
-    if (!adminDb) {
-      return NextResponse.json({ error: 'Database instance not initialized' }, { status: 500 });
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Database instance not initialized' }, { status: 503 });
     }
 
-    const notifRef = adminDb.collection('notifications').doc(id);
+    const notifRef = db.collection('notifications').doc(id);
     const notifDoc = await notifRef.get();
 
     if (!notifDoc.exists) {
@@ -46,6 +47,6 @@ export async function PATCH(
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err: any) {
     console.error(`Error updating notification ${id}:`, err);
-    return NextResponse.json({ error: err.message || 'Failed to update notification' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update notification' }, { status: 500 });
   }
 }

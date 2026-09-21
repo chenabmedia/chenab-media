@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
 import { getAdminAuth, getAdminDb, getAdminDiagnostics } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ users: usersList }, { status: 200 });
   } catch (err: any) {
     console.error('Error fetching admin users via adminDb:', err);
-    return NextResponse.json({ error: err.message || 'Failed to fetch users from Firestore database' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch users from Firestore database' }, { status: 500 });
   }
 }
 
@@ -72,21 +73,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
-    const db = getAdminDb();
-    const auth = getAdminAuth();
+    const SUPER_ADMIN_EMAIL = 'zaazze@chenabmedia.in';
+    const isCallerSuperAdmin = authRes.profile.email.toLowerCase() === SUPER_ADMIN_EMAIL;
+    const isCallerAdmin = authRes.profile.role === 'admin' || isCallerSuperAdmin;
 
-    // Check for duplicate email in Firestore
-    if (db) {
-      const existingDocSnap = await db.collection('users').where('email', '==', normalizedEmail).get();
-      if (!existingDocSnap.empty) {
+    // Security Check: Only full administrators can provision an admin role or grant escalated permissions
+    if (!isCallerAdmin) {
+      if (role === 'admin') {
+        return NextResponse.json({ error: 'Only administrators can create accounts with the admin role.' }, { status: 403 });
+      }
+
+      const callerPerms = new Set(authRes.profile.permissions || []);
+      const requestedPerms = permissions || [];
+      const hasEscalatedPerm = requestedPerms.some((p: any) => !callerPerms.has(p));
+      if (hasEscalatedPerm) {
         return NextResponse.json(
-          { error: `An administrative account with email ${normalizedEmail} already exists.` },
-          { status: 400 }
+          { error: 'Cannot assign permissions that exceed your own assigned privileges.' },
+          { status: 403 }
         );
       }
     }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const db = getAdminDb();
+    if (!db) {
+      return NextResponse.json({ error: 'Firestore Admin service unavailable' }, { status: 503 });
+    }
+    const auth = getAdminAuth();
+
+    // Check for duplicate email in Firestore
+    const existingDocSnap = await db.collection('users').where('email', '==', normalizedEmail).get();
+    if (!existingDocSnap.empty) {
+      return NextResponse.json(
+        { error: `An administrative account with email ${normalizedEmail} already exists.` },
+        { status: 400 }
+      );
+    }
     let newUid = `user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const temporaryPassword = password && password.trim() ? password.trim() : `Chn!${crypto.randomBytes(12).toString('base64url')}`;
 
     // If Admin SDK is available, create Firebase Auth user
     if (auth) {
@@ -103,7 +127,7 @@ export async function POST(req: NextRequest) {
           const createdAuth = await auth.createUser({
             email: normalizedEmail,
             emailVerified: true,
-            password: password || 'ChenabAdmin2026!',
+            password: temporaryPassword,
             displayName,
             disabled: status === 'DISABLED' || status === 'SUSPENDED',
           });
@@ -128,9 +152,7 @@ export async function POST(req: NextRequest) {
       createdBy: authRes.profile.uid,
     };
 
-    if (db) {
-      await db.collection('users').doc(newUid).set(newProfile, { merge: true });
-    }
+    await db.collection('users').doc(newUid).set(newProfile, { merge: true });
 
     // Trigger template email: AdminInvite
     const { sendTemplateEmail } = await import('@/lib/email/service');
@@ -172,6 +194,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ user: newProfile, success: true }, { status: 201 });
   } catch (err: any) {
     console.error('Error creating admin user:', err);
-    return NextResponse.json({ error: err.message || 'Failed to create admin user' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create admin user' }, { status: 500 });
   }
 }

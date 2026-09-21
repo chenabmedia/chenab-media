@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb, getAdminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 
 export async function GET(req: NextRequest) {
   const authRes = await verifyServerAuth(req);
@@ -11,9 +11,9 @@ export async function GET(req: NextRequest) {
   const { uid, artistId, displayName, email } = authRes.profile;
 
   try {
-    const db = adminDb || getAdminDb();
+    const db = getAdminDb();
     if (!db) {
-      return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
+      return NextResponse.json({ error: 'Database instance not configured' }, { status: 503 });
     }
 
     let artistData: any = null;
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ artist: artistData, userProfile: authRes.profile }, { status: 200 });
   } catch (err: any) {
     console.error('Error fetching artist profile:', err);
-    return NextResponse.json({ error: err.message || 'Failed to fetch artist profile' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch artist profile' }, { status: 500 });
   }
 }
 
@@ -75,15 +75,16 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
+    const db = getAdminDb();
 
-    if (!adminDb) {
-      return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
+    if (!db) {
+      return NextResponse.json({ error: 'Database instance not configured' }, { status: 503 });
     }
 
     // Find document ID
     let targetDocId = artistId;
     if (!targetDocId) {
-      const snap = await adminDb.collection('artists').where('userId', '==', uid).get();
+      const snap = await db.collection('artists').where('userId', '==', uid).get();
       if (!snap.empty) {
         targetDocId = snap.docs[0].id;
       }
@@ -120,7 +121,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Save to Firestore
-    await adminDb.collection('artists').doc(targetDocId).set(
+    await db.collection('artists').doc(targetDocId).set(
       {
         userId: uid,
         ...sanitizedUpdate,
@@ -128,7 +129,7 @@ export async function PATCH(req: NextRequest) {
       { merge: true }
     );
 
-    const updatedDoc = await adminDb.collection('artists').doc(targetDocId).get();
+    const updatedDoc = await db.collection('artists').doc(targetDocId).get();
 
     return NextResponse.json(
       {
@@ -139,6 +140,6 @@ export async function PATCH(req: NextRequest) {
     );
   } catch (err: any) {
     console.error('Error updating artist profile:', err);
-    return NextResponse.json({ error: err.message || 'Failed to update profile' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
   }
 }

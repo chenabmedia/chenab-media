@@ -31,7 +31,7 @@ export default function NewAdminPage() {
   const [email, setEmail] = useState<string>('');
   const [role, setRole] = useState<'admin' | 'executive'>('executive');
   const [status, setStatus] = useState<'ACTIVE' | 'DISABLED'>('ACTIVE');
-  const [password, setPassword] = useState<string>('Chenab2026!');
+  const [password, setPassword] = useState<string>('');
   const [selectedPermissions, setSelectedPermissions] = useState<AdminPermission[]>(
     DEFAULT_EXECUTIVE_PERMISSIONS
   );
@@ -222,7 +222,7 @@ export default function NewAdminPage() {
                 type="text"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Initial password for account"
+                placeholder="Leave blank to auto-generate secure key, or enter initial password"
                 className="w-full px-3.5 py-2.5 bg-[#080808] border border-[#222222] text-[#F5F5F5] focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>

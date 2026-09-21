@@ -43,7 +43,16 @@ export type AdminPermission =
   | 'journal.publish'
   | 'email.send'
   | 'email.identities.manage'
-  | 'email.logs.view';
+  | 'email.logs.view'
+  | 'storage.view'
+  | 'storage.upload'
+  | 'storage.delete'
+  | 'tickets.view'
+  | 'tickets.create'
+  | 'tickets.reply'
+  | 'tickets.manage'
+  | 'tickets.assign'
+  | 'tickets.close';
 
 export interface PermissionGroup {
   category: string;
@@ -128,6 +137,25 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: 'email.logs.view', label: 'View Email Logs', description: 'Inspect sent email audit records and statuses' },
     ],
   },
+  {
+    category: 'Storage & Media Assets',
+    permissions: [
+      { key: 'storage.view', label: 'View Storage Files', description: 'Browse and inspect object storage files and metadata' },
+      { key: 'storage.upload', label: 'Upload Storage Files', description: 'Upload media, audio, artwork, and documents to Cloudflare R2' },
+      { key: 'storage.delete', label: 'Delete Storage Files', description: 'Permanently remove files from Cloudflare R2 and database' },
+    ],
+  },
+  {
+    category: 'Mail & Ticketing',
+    permissions: [
+      { key: 'tickets.view', label: 'View Tickets & Inbound Mail', description: 'Browse and inspect email conversations and customer tickets' },
+      { key: 'tickets.create', label: 'Create Tickets', description: 'Manually open new support or inquiry tickets' },
+      { key: 'tickets.reply', label: 'Reply to Tickets', description: 'Send outbound email replies to ticket requesters' },
+      { key: 'tickets.manage', label: 'Manage Tickets', description: 'Update status, priority, category, internal notes, and artist associations' },
+      { key: 'tickets.assign', label: 'Assign Tickets', description: 'Assign conversations to staff or departments' },
+      { key: 'tickets.close', label: 'Close Tickets', description: 'Resolve and archive closed customer tickets' },
+    ],
+  },
 ];
 
 export const ALL_PERMISSIONS: AdminPermission[] = PERMISSION_GROUPS.flatMap(g =>
@@ -154,6 +182,10 @@ export const DEFAULT_EXECUTIVE_PERMISSIONS: AdminPermission[] = [
   'demos.review',
   'messages.view',
   'messages.reply',
+  'storage.view',
+  'storage.upload',
+  'tickets.view',
+  'tickets.reply',
 ];
 
 /**

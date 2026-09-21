@@ -19,6 +19,7 @@ import {
   UserCog,
   Bell,
   Mail,
+  Inbox,
   FolderArchive,
   History,
   Settings,
@@ -96,13 +97,14 @@ export function AdminSidebar({
     {
       category: 'MANAGEMENT',
       items: [
+        { label: 'Mail & Tickets', href: '/admin/mail', icon: Inbox, permission: 'tickets.view' },
         { label: 'Site CMS', href: '/admin/site', icon: Globe, permission: 'site.manage' },
         { label: 'Admins', href: '/admin/admins', icon: ShieldCheck, permission: 'admins.view' },
         { label: 'Executives', href: '/admin/executives', icon: UserCog, permission: 'admins.view' },
         { label: 'Email Identities', href: '/admin/email-identities', icon: Mail, permission: 'email.identities.manage' },
         { label: 'Compose Email', href: '/admin/email/compose', icon: Send, permission: 'email.send' },
         { label: 'Email Logs', href: '/admin/email/logs', icon: History, permission: 'email.logs.view' },
-        { label: 'Media Vault', href: '#', icon: FolderArchive, disabled: true, badge: 'SOON' },
+        { label: 'Storage', href: '/admin/storage', icon: FolderArchive, permission: 'storage.view' },
       ],
     },
     {
@@ -117,7 +119,7 @@ export function AdminSidebar({
 
   const isActive = (href: string) => {
     if (href === '/admin') return pathname === '/admin';
-    return pathname.startsWith(href);
+    return Boolean(pathname?.startsWith(href));
   };
 
   return (

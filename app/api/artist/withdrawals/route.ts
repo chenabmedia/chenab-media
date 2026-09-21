@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
-import { db } from '@/lib/firebase/firestore';
-import { collection, addDoc } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { sendTemplateEmail } from '@/lib/email/service';
 import { recordAuditLog } from '@/lib/firebase/audit';
 
@@ -39,11 +37,11 @@ export async function POST(req: NextRequest) {
       updatedAt: now,
     };
 
-    if (adminDb) {
-      await adminDb.collection('withdrawals').doc(withdrawalId).set(withdrawalData);
-    } else if (db) {
-      await addDoc(collection(db, 'withdrawals'), withdrawalData);
+    const adminDbInstance = getAdminDb();
+    if (!adminDbInstance) {
+      return NextResponse.json({ error: 'Firestore Admin service unavailable' }, { status: 503 });
     }
+    await adminDbInstance.collection('withdrawals').doc(withdrawalId).set(withdrawalData);
 
     // Trigger template email: WithdrawalReceived
     const emailResult = await sendTemplateEmail({
@@ -98,6 +96,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (err: any) {
     console.error('Error in POST /api/artist/withdrawals:', err);
-    return NextResponse.json({ error: err.message || 'Failed to request withdrawal' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to request withdrawal' }, { status: 500 });
   }
 }

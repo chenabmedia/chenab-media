@@ -63,6 +63,9 @@ export interface EmailIdentity {
   suffix: string;
   email: string;
   displayName: string;
+  department?: string;
+  signature?: string;
+  ticketingEnabled?: boolean;
   replyTo?: string;
   enabled: boolean;
   description?: string;

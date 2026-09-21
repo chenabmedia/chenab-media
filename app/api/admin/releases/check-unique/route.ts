@@ -58,6 +58,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Error checking uniqueness:', err);
-    return NextResponse.json({ error: err.message || 'Validation failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Validation failed' }, { status: 500 });
   }
 }

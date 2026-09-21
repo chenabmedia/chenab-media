@@ -1,5 +1,5 @@
 import { SiteConfig, DEFAULT_SITE_CONFIG } from '@/types/site';
-import { adminDb, getAdminDb } from './firebase/admin';
+import { getAdminDb } from './firebase/admin';
 import appletConfig from '@/firebase-applet-config.json';
 
 export async function getSiteConfig(): Promise<SiteConfig> {

@@ -28,6 +28,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ logs }, { status: 200 });
   } catch (err: any) {
     console.error('Error fetching audit logs:', err);
-    return NextResponse.json({ error: err.message || 'Failed to fetch audit logs' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch audit logs' }, { status: 500 });
   }
 }

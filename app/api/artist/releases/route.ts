@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb, getAdminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { RELEASES } from '@/data/releases';
 
 export async function GET(req: NextRequest) {
@@ -13,13 +13,12 @@ export async function GET(req: NextRequest) {
 
   try {
     let releasesList: any[] = [];
-    const db = adminDb || getAdminDb();
+    let targetArtistId = artistId;
+    let stageName = '';
+    const db = getAdminDb();
 
     if (db) {
       // Fetch artist doc to get stageName and releaseIds
-      let targetArtistId = artistId;
-      let stageName = '';
-
       if (targetArtistId) {
         const aDoc = await db.collection('artists').doc(targetArtistId).get();
         if (aDoc.exists) {
@@ -50,14 +49,23 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Fallback to static catalogue releases if Firestore releases list is empty
+    // Fallback to static catalogue releases matching this artist if Firestore releases list is empty
     if (releasesList.length === 0) {
-      releasesList = RELEASES;
+      if (stageName) {
+        const stageLower = stageName.toLowerCase();
+        releasesList = RELEASES.filter(
+          (r) =>
+            r.artistName?.toLowerCase().includes(stageLower) ||
+            (targetArtistId && r.artistIds?.includes(targetArtistId))
+        );
+      } else {
+        releasesList = [];
+      }
     }
 
     return NextResponse.json({ releases: releasesList }, { status: 200 });
   } catch (err: any) {
     console.error('Error fetching artist releases:', err);
-    return NextResponse.json({ error: err.message || 'Failed to fetch releases' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch releases' }, { status: 500 });
   }
 }

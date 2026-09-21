@@ -1,4 +1,3 @@
-import { getAdminDb, hasAdminCredentials } from './admin';
 import appletConfig from '@/firebase-applet-config.json';
 import { Artist, Release, SmartLink, JournalPost } from '@/types';
 import { JOURNAL_POSTS } from '@/data/journal';
@@ -24,155 +23,136 @@ export function slugify(text: string): string {
 function unwrapFirestoreValue(val: any): any {
   if (!val || typeof val !== 'object') return val;
   if ('stringValue' in val) return val.stringValue;
-  if ('booleanValue' in val) return val.booleanValue;
-  if ('integerValue' in val) return Number(val.integerValue);
-  if ('doubleValue' in val) return Number(val.doubleValue);
+  if ('integerValue' in val) return parseInt(val.integerValue, 10);
+  if ('doubleValue' in val) return parseFloat(val.doubleValue);
+  if ('booleanValue' in val) return Boolean(val.booleanValue);
   if ('timestampValue' in val) return val.timestampValue;
   if ('nullValue' in val) return null;
   if ('arrayValue' in val) {
-    return (val.arrayValue.values || []).map(unwrapFirestoreValue);
+    const values = val.arrayValue?.values || [];
+    return values.map(unwrapFirestoreValue);
   }
   if ('mapValue' in val) {
-    const obj: Record<string, any> = {};
-    for (const [k, v] of Object.entries(val.mapValue.fields || {})) {
-      obj[k] = unwrapFirestoreValue(v);
+    const fields = val.mapValue?.fields || {};
+    const res: Record<string, any> = {};
+    for (const k of Object.keys(fields)) {
+      res[k] = unwrapFirestoreValue(fields[k]);
     }
-    return obj;
+    return res;
   }
   return val;
 }
 
 /**
- * Parses raw Firestore REST Document into a plain object with canonical id: doc.id
+ * Parses raw Firestore REST Document resource into clean JS object
  */
-function parseFirestoreRestDoc<T = any>(doc: any): T {
+function parseFirestoreRestDoc(doc: any): any {
+  if (!doc) return null;
   const nameParts = (doc.name || '').split('/');
-  const docId = nameParts[nameParts.length - 1];
-  const result: Record<string, any> = {};
-
-  if (doc.fields) {
-    for (const [key, val] of Object.entries(doc.fields)) {
-      result[key] = unwrapFirestoreValue(val);
-    }
+  const id = nameParts[nameParts.length - 1] || '';
+  const fields = doc.fields || {};
+  const data: Record<string, any> = { id };
+  for (const k of Object.keys(fields)) {
+    data[k] = unwrapFirestoreValue(fields[k]);
   }
-
-  // Canonical ID rule: doc.id is paramount
-  result.id = docId;
-  return result as T;
+  return data;
 }
 
 /**
- * Normalizes an Artist record to conform to the Artist UI interface
+ * Normalizes an Artist record to conform to Artist interface
  */
 export function normalizeArtist(raw: any, docId: string): Artist {
   const stageName = raw.stageName || raw.name || 'Unknown Artist';
   const slug = raw.slug || slugify(stageName) || docId;
-  const image = raw.profileImage || raw.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80';
+  const genres = Array.isArray(raw.genres)
+    ? raw.genres
+    : Array.isArray(raw.genre)
+    ? raw.genre
+    : typeof raw.genre === 'string'
+    ? [raw.genre]
+    : ['Electronic'];
 
   return {
-    id: docId, // Canonical ID rule
+    id: docId,
     name: stageName,
     stageName: stageName,
+    legalName: raw.legalName || raw.realName || stageName,
+    streamingLinks: raw.streamingLinks || {},
+    releaseIds: raw.releaseIds || [],
     slug: slug,
-    image: image,
-    profileImage: image,
-    coverImage: raw.coverImage || raw.cover || '',
-    bio: raw.bio || '',
-    location: raw.location || 'Jammu & Kashmir',
-    genres: Array.isArray(raw.genres) ? raw.genres : (raw.genres ? [raw.genres] : ['Electronic', 'Ambient']),
-    status: raw.status || 'ACTIVE',
+    bio: raw.bio || raw.shortBio || 'CHENAB MEDIA roster artist based in Jammu & Kashmir.',
+    genres: genres,
+    location: raw.location || 'Jammu & Kashmir, IN',
+    image: raw.image || raw.avatarUrl || raw.heroImage || raw.imageUrl || "",
+    profileImage: raw.profileImage || raw.avatarUrl || raw.heroImage || "",
     socialLinks: raw.socialLinks || {},
-    streamingLinks: raw.streamingLinks || raw.dspLinks || {},
-    releaseIds: Array.isArray(raw.releaseIds) ? raw.releaseIds : [],
-    featuredQuote: raw.featuredQuote || '',
-    joinedAt: raw.joinedAt || raw.createdAt || '',
+    status: raw.status || 'ACTIVE',
   };
 }
 
 /**
- * Normalizes a Release record to conform to the Release UI interface
+ * Normalizes a Release record to conform to Release interface
  */
 export function normalizeRelease(raw: any, docId: string): Release {
   const title = raw.title || 'Untitled Release';
-  const artistName = raw.artistName || 'CHENAB Artist';
   const slug = raw.slug || slugify(title) || docId;
-  const cover = raw.coverImage || raw.cover || 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80';
-  const type = raw.releaseType || raw.type || 'SINGLE';
+  const smartLinks: SmartLink[] = Array.isArray(raw.smartLinks)
+    ? raw.smartLinks
+    : [];
 
   return {
-    ...raw,
-    id: docId, // Canonical ID rule
+    id: docId,
     title: title,
-    artistName: artistName,
     slug: slug,
-    cover: cover,
-    coverImage: cover,
-    type: type,
-    releaseType: type,
-    catalogueNumber: raw.catalogueNumber || `CHNB-${docId.slice(-3).toUpperCase()}`,
-    releaseDate: raw.releaseDate || new Date().toISOString().split('T')[0],
-    genres: Array.isArray(raw.genres) ? raw.genres : (raw.genres ? [raw.genres] : ['Electronic']),
-    description: raw.description || '',
+    artistIds: raw.artistIds || (raw.artistId ? [raw.artistId] : []),
+    artistName: raw.artistName || raw.artist || 'CHENAB Artist',
+    releaseType: raw.releaseType || 'SINGLE',
+    catalogueNumber: raw.catalogueNumber || raw.catalogNumber || `CHN-${docId.substring(0, 4).toUpperCase()}`,
+    releaseDate: raw.releaseDate || raw.date || '2026-01-01',
+    coverImage: raw.coverImage || raw.coverArtUrl || raw.coverArt || raw.cover || "",
+    cover: raw.cover || raw.coverImage || raw.coverArtUrl || "",
+    genre: raw.genre || 'Electronic',
     status: raw.status || 'PUBLISHED',
+    description: raw.description || '',
     tracks: Array.isArray(raw.tracks) ? raw.tracks : [],
-    credits: Array.isArray(raw.credits) ? raw.credits : [],
-    artistIds: Array.isArray(raw.primaryArtistIds) && raw.primaryArtistIds.length > 0 
-      ? raw.primaryArtistIds 
-      : (Array.isArray(raw.artistIds) ? raw.artistIds : []),
-    featuredArtistIds: Array.isArray(raw.featuredArtistIds) ? raw.featuredArtistIds : [],
-    streamingLinks: raw.streamingLinks || raw.dspLinks || {},
-    dspLinks: raw.dspLinks || raw.streamingLinks || {},
-    smartLink: raw.smartLink || undefined,
+    credits: raw.credits || '',
   };
 }
 
 /**
- * Fetches all public artists from Firestore (using adminDb/getAdminDb with REST fallback)
+ * Helper to fetch documents from Firestore REST API
  */
-export async function getPublicArtists(): Promise<Artist[]> {
-  if (hasAdminCredentials()) {
-    const db = getAdminDb();
-    if (db) {
-      try {
-        const snap = await db.collection('artists').get();
-        if (!snap.empty) {
-          const artists: Artist[] = [];
-          snap.forEach((doc) => {
-            artists.push(normalizeArtist(doc.data(), doc.id));
-          });
-          return artists;
-        }
-      } catch (e: any) {
-        // Fallback to REST API on any Admin DB error
-      }
-    }
-  }
-
-  // REST API Fallback
+async function fetchFirestoreCollection(collectionName: string): Promise<any[]> {
   try {
     const cfg = appletConfig as Record<string, string>;
     const projectId = cfg.projectId || 'chenabmedia-in';
     const dbId = cfg.firestoreDatabaseId || '(default)';
     const apiKey = cfg.apiKey;
 
-    if (apiKey) {
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/artists?key=${apiKey}`;
-      const res = await fetch(url, { cache: 'no-store' });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.documents && json.documents.length > 0) {
-          return json.documents.map((doc: any) => {
-            const parsed = parseFirestoreRestDoc(doc);
-            return normalizeArtist(parsed, parsed.id);
-          });
-        }
+    if (!apiKey) return [];
+
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/${collectionName}?key=${apiKey}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.documents && Array.isArray(json.documents)) {
+        return json.documents.map(parseFirestoreRestDoc).filter(Boolean);
       }
     }
-  } catch (err: any) {
-    // Silently continue
+  } catch (err) {
+    // Fail gracefully without crashing Worker / SSR isolate
   }
+  return [];
+}
 
-  // Return empty array if Firestore has no artists or is unreachable (never return stale demo data)
+/**
+ * Fetches all public artists from Firestore via Worker-safe REST API
+ */
+export async function getPublicArtists(): Promise<Artist[]> {
+  const docs = await fetchFirestoreCollection('artists');
+  if (docs.length > 0) {
+    return docs.map((d) => normalizeArtist(d, d.id));
+  }
   return [];
 }
 
@@ -195,81 +175,30 @@ export async function getPublicArtistBySlug(slug: string): Promise<Artist | null
 }
 
 /**
- * Fetches all public releases from Firestore
+ * Fetches all public releases from Firestore via Worker-safe REST API
  */
 export async function getPublicReleases(): Promise<Release[]> {
-  if (hasAdminCredentials()) {
-    const db = getAdminDb();
-    if (db) {
-      try {
-        const snap = await db.collection('releases').get();
-        if (!snap.empty) {
-          const releases: Release[] = [];
-          snap.forEach((doc) => {
-            const raw = doc.data();
-            const normalized = normalizeRelease(raw, doc.id);
-            // Only show published / out now releases on public views
-            if (
-              normalized.status === 'PUBLISHED' ||
-              normalized.status === 'OUT NOW' ||
-              normalized.status === 'PRE-ORDER' ||
-              !normalized.status
-            ) {
-              releases.push(normalized);
-            }
-          });
-
-          if (releases.length > 0) {
-            // Sort newest first
-            releases.sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
-            return releases;
-          }
-        }
-      } catch (e: any) {
-        // Fallback to REST API on any Admin DB error
+  const docs = await fetchFirestoreCollection('releases');
+  if (docs.length > 0) {
+    const releases: Release[] = [];
+    for (const d of docs) {
+      const normalized = normalizeRelease(d, d.id);
+      if (
+        normalized.status === 'PUBLISHED' ||
+        normalized.status === 'OUT NOW' ||
+        normalized.status === 'PRE-ORDER' ||
+        !normalized.status
+      ) {
+        releases.push(normalized);
       }
+    }
+
+    if (releases.length > 0) {
+      releases.sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
+      return releases;
     }
   }
 
-  // REST API Fallback
-  try {
-    const cfg = appletConfig as Record<string, string>;
-    const projectId = cfg.projectId || 'chenabmedia-in';
-    const dbId = cfg.firestoreDatabaseId || '(default)';
-    const apiKey = cfg.apiKey;
-
-    if (apiKey) {
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/releases?key=${apiKey}`;
-      const res = await fetch(url, { cache: 'no-store' });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.documents && json.documents.length > 0) {
-          const releases: Release[] = [];
-          json.documents.forEach((doc: any) => {
-            const parsed = parseFirestoreRestDoc(doc);
-            const normalized = normalizeRelease(parsed, parsed.id);
-            if (
-              normalized.status === 'PUBLISHED' ||
-              normalized.status === 'OUT NOW' ||
-              normalized.status === 'PRE-ORDER' ||
-              !normalized.status
-            ) {
-              releases.push(normalized);
-            }
-          });
-
-          if (releases.length > 0) {
-            releases.sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
-            return releases;
-          }
-        }
-      }
-    }
-  } catch (err: any) {
-    // Silently continue
-  }
-
-  // Return empty array if Firestore has no published releases or is unreachable (never return stale demo data)
   return [];
 }
 
@@ -279,7 +208,6 @@ export async function getPublicReleases(): Promise<Release[]> {
 export async function getPublicReleaseBySlug(slug: string): Promise<Release | null> {
   const releases = await getPublicReleases();
   const lowerSlug = slug.toLowerCase();
-
   const found = releases.find(
     (r) =>
       (r.slug && r.slug.toLowerCase() === lowerSlug) ||
@@ -309,7 +237,6 @@ export function normalizeJournalPost(raw: any, docId: string): JournalPost {
   } else if (typeof raw.content === 'string') {
     content = raw.content.split('\n\n').filter(Boolean);
   }
-
   const rawContent = typeof raw.content === 'string' ? raw.content : (Array.isArray(raw.content) ? raw.content.join('\n\n') : '');
   const readTime = typeof raw.readTime === 'number' ? `${raw.readTime} min read` : (raw.readTime || '5 min read');
   const tags = Array.isArray(raw.tags) ? raw.tags : [];
@@ -334,10 +261,6 @@ export function normalizeJournalPost(raw: any, docId: string): JournalPost {
     tags,
     status,
     featured,
-    createdAt: raw.createdAt || '',
-    updatedAt: raw.updatedAt || '',
-    createdBy: raw.createdBy || '',
-    updatedBy: raw.updatedBy || '',
   };
 }
 
@@ -345,65 +268,20 @@ export function normalizeJournalPost(raw: any, docId: string): JournalPost {
  * Fetches all published journal posts from Firestore with fallback to static JOURNAL_POSTS
  */
 export async function getPublicJournalPosts(): Promise<JournalPost[]> {
-  if (hasAdminCredentials()) {
-    const db = getAdminDb();
-    if (db) {
-      try {
-        const snap = await db.collection('journal').get();
-        if (!snap.empty) {
-          const posts: JournalPost[] = [];
-          snap.forEach((doc) => {
-            const raw = doc.data();
-            const normalized = normalizeJournalPost(raw, doc.id);
-            // Only show published articles on public views
-            if (normalized.status === 'PUBLISHED' || !normalized.status) {
-              posts.push(normalized);
-            }
-          });
-
-          if (posts.length > 0) {
-            // Sort newest first by date
-            posts.sort((a, b) => new Date(b.date || b.publishedAt || '').getTime() - new Date(a.date || a.publishedAt || '').getTime());
-            return posts;
-          }
-        }
-      } catch (e: any) {
-        // Fallback to REST API on any Admin DB error
+  const docs = await fetchFirestoreCollection('journal');
+  if (docs.length > 0) {
+    const posts: JournalPost[] = [];
+    for (const d of docs) {
+      const normalized = normalizeJournalPost(d, d.id);
+      if (normalized.status === 'PUBLISHED' || !normalized.status) {
+        posts.push(normalized);
       }
     }
-  }
 
-  // REST API Fallback
-  try {
-    const cfg = appletConfig as Record<string, string>;
-    const projectId = cfg.projectId || 'chenabmedia-in';
-    const dbId = cfg.firestoreDatabaseId || '(default)';
-    const apiKey = cfg.apiKey;
-
-    if (apiKey) {
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/journal?key=${apiKey}`;
-      const res = await fetch(url, { cache: 'no-store' });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.documents && json.documents.length > 0) {
-          const posts: JournalPost[] = [];
-          json.documents.forEach((doc: any) => {
-            const parsed = parseFirestoreRestDoc(doc);
-            const normalized = normalizeJournalPost(parsed, parsed.id);
-            if (normalized.status === 'PUBLISHED' || !normalized.status) {
-              posts.push(normalized);
-            }
-          });
-
-          if (posts.length > 0) {
-            posts.sort((a, b) => new Date(b.date || b.publishedAt || '').getTime() - new Date(a.date || a.publishedAt || '').getTime());
-            return posts;
-          }
-        }
-      }
+    if (posts.length > 0) {
+      posts.sort((a, b) => new Date(b.date || b.publishedAt || '').getTime() - new Date(a.date || a.publishedAt || '').getTime());
+      return posts;
     }
-  } catch (err: any) {
-    // Silently continue
   }
 
   // Fallback to static JOURNAL_POSTS formatted
@@ -416,7 +294,6 @@ export async function getPublicJournalPosts(): Promise<JournalPost[]> {
 export async function getPublicJournalPostBySlug(slug: string): Promise<JournalPost | null> {
   const posts = await getPublicJournalPosts();
   const lowerSlug = slug.toLowerCase();
-
   const found = posts.find(
     (p) =>
       (p.slug && p.slug.toLowerCase() === lowerSlug) ||
@@ -426,4 +303,3 @@ export async function getPublicJournalPostBySlug(slug: string): Promise<JournalP
 
   return found || null;
 }
-

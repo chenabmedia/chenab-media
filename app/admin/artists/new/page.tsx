@@ -34,7 +34,7 @@ export default function AdminNewArtistPage() {
   const [legalName, setLegalName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('ChenabArtist2026!');
+  const [password, setPassword] = useState('');
   const [location, setLocation] = useState('Srinagar, J&K');
   const [bio, setBio] = useState('');
   const [genres, setGenres] = useState('Contemporary');
@@ -218,8 +218,7 @@ export default function AdminNewArtistPage() {
               <label className="block text-[#CCCCCC] uppercase">INITIAL SECURITY KEY / PASSWORD</label>
               <input
                 type="text"
-                required
-                placeholder="ChenabArtist2026!"
+                placeholder="Leave blank to auto-generate secure password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-[#111111] border border-[#222222] p-3 text-[#F5F5F5] focus:outline-none focus:border-[#555555]"

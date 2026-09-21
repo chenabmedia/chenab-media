@@ -313,7 +313,7 @@ export function initAdminApp(): App | null {
         adminAppInstance = initializeApp({ credential, projectId });
         return adminAppInstance;
       } catch (certInitErr) {
-        console.warn('[Firebase Admin] initializeApp with credential failed, attempting fallback:', certInitErr);
+        console.warn('[Firebase Admin] initializeApp with credential failed:', certInitErr);
       }
     }
 
@@ -327,16 +327,8 @@ export function initAdminApp(): App | null {
       }
     }
 
-    // Node.js fallback: Initialize with projectId.
-    // In Node.js / Vercel, this enables Firebase Auth ID token verification via Google public keys
-    // and connects Firestore via default environment credentials.
-    try {
-      adminAppInstance = initializeApp({ projectId });
-      console.log('[Firebase Admin] Initialized with projectId fallback:', projectId);
-      return adminAppInstance;
-    } catch (fallbackErr) {
-      console.error('[Firebase Admin] Fallback initialization error:', fallbackErr);
-    }
+    // Fail closed: Do NOT initialize an unauthenticated Admin app with projectId only.
+    console.warn('[Firebase Admin] No valid service account credential found. Failing closed.');
   } catch (error) {
     console.error('[Firebase Admin] SDK initialization error:', error);
   }
@@ -354,25 +346,6 @@ export function getAdminAuth(): Auth | null {
   const app = getApps().length ? getApp() : initAdminApp();
   return app ? getAuth(app) : null;
 }
-
-/**
- * Lazy proxy delegating to getAdminAuth() on first access.
- */
-export const adminAuth: Auth = new Proxy({} as Auth, {
-  get(_target, prop) {
-    const auth = getAdminAuth();
-    if (auth) {
-      const val = (auth as any)[prop];
-      return typeof val === 'function' ? val.bind(auth) : val;
-    }
-    if (typeof prop === 'string') {
-      return () => {
-        throw new Error(`Firebase Admin Auth is not initialized. Cannot call ${String(prop)}()`);
-      };
-    }
-    return undefined;
-  },
-});
 
 let cachedDb: Firestore | null = null;
 
@@ -393,30 +366,6 @@ export function getAdminDb(): Firestore | null {
     return null;
   }
 }
-
-/**
- * Lazy proxy delegating to getAdminDb() on first access.
- */
-export const adminDb: Firestore = new Proxy({} as Firestore, {
-  get(_target, prop) {
-    const db = getAdminDb();
-    if (db) {
-      const val = (db as any)[prop];
-      return typeof val === 'function' ? val.bind(db) : val;
-    }
-    if (prop === 'collection' || prop === 'doc') {
-      return () => {
-        throw new Error('Firebase Admin Firestore is not initialized. Please configure FIREBASE_SERVICE_ACCOUNT in environment variables.');
-      };
-    }
-    if (typeof prop === 'string') {
-      return () => {
-        throw new Error(`Firebase Admin Firestore is not initialized. Cannot call ${String(prop)}()`);
-      };
-    }
-    return undefined;
-  },
-});
 
 export interface FirebaseRuntimeDiagnostics {
   clientFirebaseProjectId: string;

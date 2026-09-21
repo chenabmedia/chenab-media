@@ -1,5 +1,9 @@
 import {
   getAuth,
+  initializeAuth,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  inMemoryPersistence,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
@@ -8,7 +12,20 @@ import {
 } from 'firebase/auth';
 import { firebaseApp } from './client';
 
-export const auth: Auth = getAuth(firebaseApp);
+function initClientAuth(): Auth {
+  if (typeof window === 'undefined') {
+    return getAuth(firebaseApp);
+  }
+  try {
+    return initializeAuth(firebaseApp, {
+      persistence: [browserLocalPersistence, browserSessionPersistence, inMemoryPersistence],
+    });
+  } catch {
+    return getAuth(firebaseApp);
+  }
+}
+
+export const auth: Auth = initClientAuth();
 
 export {
   signInWithEmailAndPassword,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { sendTemplateEmail } from '@/lib/email/service';
 import { recordAuditLog } from '@/lib/firebase/audit';
 
@@ -14,18 +14,40 @@ export async function POST(
     return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
   }
 
-  if (!adminDb) {
-    return NextResponse.json({ error: 'Database instance not configured' }, { status: 500 });
+  const db = getAdminDb();
+  if (!db) {
+    return NextResponse.json({ error: 'Database instance not configured' }, { status: 503 });
   }
 
   try {
-    const docRef = adminDb.collection('agreements').doc(id);
+    const docRef = db.collection('agreements').doc(id);
     const snap = await docRef.get();
     if (!snap.exists) {
       return NextResponse.json({ error: 'Agreement record not found' }, { status: 404 });
     }
 
     const existing = snap.data() as any;
+
+    // Check 1: Prevent re-signing already executed agreements
+    if (existing.status === 'EXECUTED' || existing.signedAt) {
+      return NextResponse.json(
+        { error: 'Agreement has already been executed and signed.' },
+        { status: 400 }
+      );
+    }
+
+    // Check 2: Verify caller authorization (must match agreement artistEmail or be an administrator)
+    const callerEmail = authRes.profile.email.toLowerCase();
+    const targetEmail = (existing.artistEmail || '').toLowerCase();
+    const isCallerAdmin = authRes.profile.role === 'admin' || authRes.profile.role === 'executive';
+
+    if (!isCallerAdmin && callerEmail !== targetEmail) {
+      return NextResponse.json(
+        { error: 'Forbidden: You are not authorized to sign this agreement.' },
+        { status: 403 }
+      );
+    }
+
     const now = new Date().toISOString();
 
     const updatedData = {
@@ -87,6 +109,6 @@ export async function POST(
     });
   } catch (err: any) {
     console.error(`Error signing agreement ${id}:`, err);
-    return NextResponse.json({ error: err.message || 'Failed to sign agreement' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to sign agreement' }, { status: 500 });
   }
 }

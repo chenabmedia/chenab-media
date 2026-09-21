@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth } from '@/lib/firebase/admin';
+import { getAdminAuth } from '@/lib/firebase/admin';
 import { sendTemplateEmail } from '@/lib/email/service';
 
 export async function POST(req: NextRequest) {
@@ -16,12 +16,13 @@ export async function POST(req: NextRequest) {
     let userRole = 'MEMBER';
     let resetPasswordLink = `https://chenabmedia.in/login?mode=resetPassword&email=${encodeURIComponent(normalizedEmail)}`;
 
-    if (adminAuth) {
+    const auth = getAdminAuth();
+    if (auth) {
       try {
-        const authUser = await adminAuth.getUserByEmail(normalizedEmail);
+        const authUser = await auth.getUserByEmail(normalizedEmail);
         if (authUser.displayName) displayName = authUser.displayName;
         // Generate actual Firebase Auth password reset link as source of truth
-        resetPasswordLink = await adminAuth.generatePasswordResetLink(normalizedEmail);
+        resetPasswordLink = await auth.generatePasswordResetLink(normalizedEmail);
       } catch (e) {
         // Return success even if user not found to prevent user enumeration
         return NextResponse.json({
@@ -66,6 +67,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Error in POST /api/auth/password-reset:', err);
-    return NextResponse.json({ error: err.message || 'Failed to dispatch password reset email' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to dispatch password reset email' }, { status: 500 });
   }
 }

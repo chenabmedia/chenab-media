@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminAuth, adminDb, getAdminDb, getAdminAuth } from '@/lib/firebase/admin';
+import { getAdminDb, getAdminAuth } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import { ARTISTS } from '@/data/artists';
+
+const ALLOWED_ARTIST_FIELDS = [
+  'stageName',
+  'legalName',
+  'email',
+  'phone',
+  'profileImage',
+  'coverImage',
+  'bio',
+  'location',
+  'genres',
+  'socialLinks',
+  'streamingLinks',
+  'status',
+  'catalogueNumberPrefix',
+  'internalNotes',
+] as const;
 
 export async function GET(
   req: NextRequest,
@@ -74,7 +91,7 @@ export async function GET(
     return NextResponse.json({ error: 'Artist record not found' }, { status: 404 });
   } catch (err: any) {
     console.error(`Error fetching artist:`, err);
-    return NextResponse.json({ error: err.message || 'Failed to fetch artist details' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch artist details' }, { status: 500 });
   }
 }
 
@@ -123,6 +140,7 @@ export async function PATCH(
       const profileImageVal = body.profileImage || staticArtist.image || '';
 
       const newArtistData: Record<string, any> = {
+        id: docId,
         slug: staticArtist.slug || id,
         stageName: stageNameVal,
         name: stageNameVal,
@@ -134,7 +152,7 @@ export async function PATCH(
         coverImage: body.coverImage !== undefined ? body.coverImage : ((staticArtist as any).coverImage || ''),
         bio: body.bio !== undefined ? body.bio : (staticArtist.bio || ''),
         location: body.location !== undefined ? body.location : (staticArtist.location || ''),
-        genres: body.genres !== undefined ? body.genres : (staticArtist.genres || []),
+        genres: body.genres !== undefined ? (Array.isArray(body.genres) ? body.genres : [body.genres]) : (staticArtist.genres || []),
         catalogueNumberPrefix: body.catalogueNumberPrefix !== undefined ? body.catalogueNumberPrefix : ((staticArtist as any).catalogueNumberPrefix || docId),
         status: body.status !== undefined ? body.status : (staticArtist.status || 'ACTIVE'),
         socialLinks: body.socialLinks !== undefined ? body.socialLinks : (staticArtist.socialLinks || {}),
@@ -142,19 +160,8 @@ export async function PATCH(
         releaseIds: staticArtist.releaseIds || [],
         internalNotes: body.internalNotes !== undefined ? body.internalNotes : ((staticArtist as any).internalNotes || ''),
         createdAt: now,
-        ...body,
-        id: docId,
         updatedAt: now,
       };
-
-      if (body.stageName) {
-        newArtistData.name = body.stageName;
-        newArtistData.stageName = body.stageName;
-      }
-      if (body.profileImage) {
-        newArtistData.image = body.profileImage;
-        newArtistData.profileImage = body.profileImage;
-      }
 
       await artistRef.set(newArtistData);
 
@@ -165,7 +172,7 @@ export async function PATCH(
         'artist',
         docId,
         `Migrated static artist "${stageNameVal}" (${docId}) to Firestore on initial save.`,
-        { artistId: docId, updatedFields: Object.keys(body), migratedFromStatic: true }
+        { artistId: docId, migratedFromStatic: true }
       );
 
       const createdDoc = await artistRef.get();
@@ -178,14 +185,19 @@ export async function PATCH(
     const currentArtist = artistDoc.data();
 
     const updateData: Record<string, any> = {
-      ...body,
       updatedAt: now,
     };
 
-    if (body.stageName) {
+    for (const field of ALLOWED_ARTIST_FIELDS) {
+      if (body[field] !== undefined) {
+        updateData[field] = body[field];
+      }
+    }
+
+    if (body.stageName !== undefined) {
       updateData.name = body.stageName;
     }
-    if (body.profileImage) {
+    if (body.profileImage !== undefined) {
       updateData.image = body.profileImage;
     }
 
@@ -229,7 +241,7 @@ export async function PATCH(
     return NextResponse.json({ success: true, artist: { ...updatedDoc.data(), id: updatedDoc.id } }, { status: 200 });
   } catch (err: any) {
     console.error(`Error updating artist:`, err);
-    return NextResponse.json({ error: err.message || 'Failed to update artist profile' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update artist profile' }, { status: 500 });
   }
 }
 
@@ -316,6 +328,6 @@ export async function DELETE(
     return NextResponse.json({ success: true, message: 'Artist account suspended successfully' }, { status: 200 });
   } catch (err: any) {
     console.error(`Error disabling artist:`, err);
-    return NextResponse.json({ error: err.message || 'Failed to disable artist account' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to disable artist account' }, { status: 500 });
   }
 }

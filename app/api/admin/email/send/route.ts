@@ -97,9 +97,13 @@ export async function POST(req: NextRequest) {
 
     if (buttonEnabled && buttonUrl) {
       const trimmedUrl = buttonUrl.trim();
-      if (!trimmedUrl.startsWith('https://') && !trimmedUrl.startsWith('/')) {
+      const isProtocolRelative = trimmedUrl.startsWith('//') || trimmedUrl.startsWith('/\\');
+      const isHttps = trimmedUrl.startsWith('https://');
+      const isInternalPath = trimmedUrl.startsWith('/') && !isProtocolRelative;
+
+      if (!isHttps && !isInternalPath) {
         return NextResponse.json(
-          { error: 'Button URL must be a secure HTTPS URL or approved internal path' },
+          { error: 'Button URL must be a valid secure HTTPS URL or approved relative internal path' },
           { status: 400 }
         );
       }
@@ -165,7 +169,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('Error in POST /api/admin/email/send:', error);
     return NextResponse.json(
-      { error: error.message || 'Internal server error during email dispatch' },
+      { error: 'Internal server error during email dispatch' },
       { status: 500 }
     );
   }

@@ -40,8 +40,19 @@ export interface AuditLogEntry {
     | 'AGREEMENT_ISSUED'
     | 'AGREEMENT_SIGNED'
     | 'CONTACT_SUBMITTED'
-    | 'DEMO_SUBMITTED';
-  targetType: 'user' | 'artist' | 'release' | 'journal' | 'demo' | 'system' | 'email_template' | 'withdrawal' | 'agreement' | 'message';
+    | 'DEMO_SUBMITTED'
+    | 'STORAGE_UPLOAD'
+    | 'STORAGE_DELETE'
+    | 'STORAGE_VISIBILITY_CHANGED'
+    | 'STORAGE_SIGNED_URL_GENERATED'
+    | 'TICKET_CREATED'
+    | 'TICKET_UPDATED'
+    | 'TICKET_REPLIED'
+    | 'TICKET_NOTE_ADDED'
+    | 'TICKET_ASSIGNED'
+    | 'TICKET_STATUS_CHANGED'
+    | 'TICKET_CLOSED';
+  targetType: 'user' | 'artist' | 'release' | 'journal' | 'demo' | 'system' | 'email_template' | 'withdrawal' | 'agreement' | 'message' | 'storage_file' | 'ticket';
   targetId: string;
   description: string;
   metadata?: Record<string, any>;

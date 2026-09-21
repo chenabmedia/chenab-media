@@ -60,15 +60,18 @@ service cloud.firestore {
       allow get: if isUser(userId) || isExecutive();
       allow list: if isExecutive();
       allow create: if (isUser(userId) 
-        && (request.resource.data.role == 'artist' || isSuperAdminEmail())
+        && request.resource.data.role == 'artist'
         && request.resource.data.uid == userId)
-        || isAdmin();
-      allow update: if isSuperAdminEmail() || (isUser(userId) 
+        || isSuperAdminEmail();
+      allow update: if isSuperAdminEmail() || (
+        isUser(userId) 
         && request.resource.data.role == resource.data.role // Cannot change role
+        && request.resource.data.uid == resource.data.uid // Cannot change UID
+        && request.resource.data.status == resource.data.status // Cannot change status
         && (!('permissions' in resource.data) || request.resource.data.permissions == resource.data.permissions) // Cannot modify permissions
-        && request.resource.data.uid == resource.data.uid)
-        || isAdmin();
-      allow delete: if isAdmin();
+        && (!('email' in resource.data) || request.resource.data.email == resource.data.email) // Cannot modify email
+      );
+      allow delete: if isSuperAdminEmail();
     }
 
     // Public catalog collections (Artists, Releases, Journal)
@@ -145,6 +148,27 @@ service cloud.firestore {
     match /auditLogs/{logId} {
       allow read: if isExecutive();
       allow write: if isAdmin();
+    }
+
+    // Storage Files Metadata (Cloudflare R2)
+    match /storage_files/{fileId} {
+      allow read: if resource.data.visibility == 'PUBLIC' || isExecutive();
+      allow write: if isExecutive();
+    }
+
+    // Mail & Ticketing System
+    match /tickets/{ticketId} {
+      allow read, write: if isExecutive();
+    }
+    match /ticket_messages/{messageId} {
+      allow read, write: if isExecutive();
+    }
+    match /ticket_events/{eventId} {
+      allow read: if isExecutive();
+      allow write: if isExecutive();
+    }
+    match /system_counters/{counterId} {
+      allow read, write: if isExecutive();
     }
   }
 }

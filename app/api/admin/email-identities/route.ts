@@ -8,7 +8,7 @@ const ALLOWED_DOMAIN = 'chenabmedia.in';
 
 export async function GET(req: NextRequest) {
   try {
-    const authRes = await verifyServerAuth(req);
+    const authRes = await verifyServerAuth(req, 'email.identities.manage');
     if (!authRes.authenticated || !authRes.profile) {
       return NextResponse.json({ error: authRes.error || 'Unauthorized' }, { status: 401 });
     }
@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ identities });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to fetch email identities' }, { status: 500 });
+    console.error('Error in GET /api/admin/email-identities:', error);
+    return NextResponse.json({ error: 'Failed to fetch email identities' }, { status: 500 });
   }
 }
 
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { suffix, displayName, replyTo, description, enabled } = body;
+    const { suffix, displayName, replyTo, description, enabled, department, signature, ticketingEnabled } = body;
 
     if (!suffix) {
       return NextResponse.json({ error: 'Suffix is required' }, { status: 400 });
@@ -76,6 +77,9 @@ export async function POST(req: NextRequest) {
       email,
       displayName: displayName || `Chenab ${cleanSuffix}`,
       replyTo: replyTo || email,
+      department: department || undefined,
+      signature: signature || undefined,
+      ticketingEnabled: ticketingEnabled !== undefined ? ticketingEnabled : true,
       enabled: enabled !== undefined ? enabled : true,
       description: description || '',
       createdAt: now,
@@ -98,6 +102,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, identity: { ...newIdentity, id: newId } });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to create email identity' }, { status: 500 });
+    console.error('Error in POST /api/admin/email-identities:', error);
+    return NextResponse.json({ error: 'Failed to create email identity' }, { status: 500 });
   }
 }

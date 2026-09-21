@@ -1,4 +1,4 @@
-import { adminDb, getAdminDb } from './admin';
+import { getAdminDb } from './admin';
 import { AuditLogEntry } from '@/types/admin';
 
 export interface RecordAuditLogParams {

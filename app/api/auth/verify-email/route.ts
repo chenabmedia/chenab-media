@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth } from '@/lib/firebase/admin';
+import { getAdminAuth } from '@/lib/firebase/admin';
 import { sendTemplateEmail } from '@/lib/email/service';
 
 export async function POST(req: NextRequest) {
@@ -15,9 +15,10 @@ export async function POST(req: NextRequest) {
     let displayName = 'CHENAB Member';
     let userRole = 'MEMBER';
 
-    if (adminAuth) {
+    const auth = getAdminAuth();
+    if (auth) {
       try {
-        const uSnap = await adminAuth.getUserByEmail(normalizedEmail);
+        const uSnap = await auth.getUserByEmail(normalizedEmail);
         if (uSnap.displayName) displayName = uSnap.displayName;
       } catch (e) {
         // User not found in Firebase Auth yet, continue with fallback
@@ -68,6 +69,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Error in POST /api/auth/verify-email:', err);
-    return NextResponse.json({ error: err.message || 'Failed to dispatch verification email' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to dispatch verification email' }, { status: 500 });
   }
 }

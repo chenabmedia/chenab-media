@@ -27,7 +27,8 @@ export async function GET(
     }
     return NextResponse.json({ user: docSnap.data() as UserProfile }, { status: 200 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Error retrieving user profile' }, { status: 500 });
+    console.error('Error retrieving user profile:', err);
+    return NextResponse.json({ error: 'Failed to retrieve user profile' }, { status: 500 });
   }
 }
 
@@ -70,8 +71,16 @@ export async function PUT(
 
     const SUPER_ADMIN_EMAIL = 'zaazze@chenabmedia.in';
     const isTargetSuperAdmin = existingProfile.email.toLowerCase() === SUPER_ADMIN_EMAIL;
+    const isCallerSuperAdmin = authRes.profile.email.toLowerCase() === SUPER_ADMIN_EMAIL;
+    const isCallerAdmin = authRes.profile.role === 'admin' || isCallerSuperAdmin;
 
     if (isTargetSuperAdmin) {
+      if (!isCallerSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Only the super administrator can modify the super admin profile.' },
+          { status: 403 }
+        );
+      }
       if (role !== 'admin') {
         return NextResponse.json(
           { error: 'The super admin account role cannot be changed away from admin.' },
@@ -92,9 +101,38 @@ export async function PUT(
       }
     }
 
-    // Security Check: Self Escalation Protection
-    if (authRes.profile.uid === uid && authRes.profile.role !== 'admin' && role === 'admin') {
-      return NextResponse.json({ error: 'Self-permission escalation is forbidden.' }, { status: 403 });
+    // Security Check 1: Self-edit restrictions
+    if (authRes.profile.uid === uid) {
+      if (role !== existingProfile.role) {
+        return NextResponse.json({ error: 'Modifying your own role is forbidden.' }, { status: 403 });
+      }
+      if (status !== existingProfile.status) {
+        return NextResponse.json({ error: 'Modifying your own account status is forbidden.' }, { status: 403 });
+      }
+      if (JSON.stringify(permissions || []) !== JSON.stringify(existingProfile.permissions || [])) {
+        return NextResponse.json({ error: 'Modifying your own permissions is forbidden.' }, { status: 403 });
+      }
+    }
+
+    // Security Check 2: Non-admins cannot promote anyone to admin or modify existing admin accounts
+    if (!isCallerAdmin) {
+      if (role === 'admin') {
+        return NextResponse.json({ error: 'Only administrators can assign the admin role.' }, { status: 403 });
+      }
+      if (existingProfile.role === 'admin') {
+        return NextResponse.json({ error: 'Only administrators can modify administrative accounts.' }, { status: 403 });
+      }
+
+      // Ensure caller cannot grant permissions they do not possess
+      const callerPerms = new Set(authRes.profile.permissions || []);
+      const requestedPerms = permissions || [];
+      const hasEscalatedPerm = requestedPerms.some((p: any) => !callerPerms.has(p));
+      if (hasEscalatedPerm) {
+        return NextResponse.json(
+          { error: 'Cannot grant permissions that exceed your own assigned administrative privileges.' },
+          { status: 403 }
+        );
+      }
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -158,7 +196,7 @@ export async function PUT(
     return NextResponse.json({ user: updatedProfile, success: true }, { status: 200 });
   } catch (err: any) {
     console.error('Error updating admin user:', err);
-    return NextResponse.json({ error: err.message || 'Failed to update admin user' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update admin user' }, { status: 500 });
   }
 }
 
@@ -216,6 +254,6 @@ export async function DELETE(
     return NextResponse.json({ success: true, message: 'Admin account disabled successfully.' }, { status: 200 });
   } catch (err: any) {
     console.error('Error disabling admin user:', err);
-    return NextResponse.json({ error: err.message || 'Failed to disable admin user' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to disable admin user' }, { status: 500 });
   }
 }

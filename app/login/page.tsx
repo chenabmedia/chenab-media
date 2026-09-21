@@ -72,7 +72,7 @@ function LoginContent() {
   const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectParam = searchParams.get('redirect');
+  const redirectParam = searchParams?.get('redirect');
 
   const [mode, setMode] = useState<'signin' | 'forgot'>('signin');
   const [email, setEmail] = useState('');

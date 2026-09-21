@@ -15,6 +15,7 @@ export default function DemoPage() {
     streamingLinks: '',
     demoTitle: '',
     message: '',
+    website_confirm: '',
   });
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -35,21 +36,32 @@ export default function DemoPage() {
 
     setIsSubmitting(true);
     try {
-      // Simulate/post to API
+      // Dispatch demo payload
       const res = await fetch('/api/demo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...formData, fileName: selectedFile?.name }),
       });
 
+      const resData = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (res.status === 429) {
+          showToast(resData.error || 'Too many submissions. Please try again later.', 'error');
+          return;
+        }
+        if (res.status === 400) {
+          showToast(resData.error || 'Please review form fields and try again.', 'error');
+          return;
+        }
+        showToast(resData.error || 'Failed to submit demo. Please try again later.', 'error');
+        return;
       }
+
       setIsSubmitted(true);
       showToast('Demo recording submitted to A&R queue successfully.', 'success');
     } catch {
-      setIsSubmitted(true);
-      showToast('Demo submission recorded in queue.', 'success');
+      showToast('Network error while dispatching demo. Please try again.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -101,6 +113,7 @@ export default function DemoPage() {
                 streamingLinks: '',
                 demoTitle: '',
                 message: '',
+                website_confirm: '',
               });
               setSelectedFile(null);
             }}
@@ -111,6 +124,33 @@ export default function DemoPage() {
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8 bg-[#0C0C0C] border border-[#1A1A1A] p-4 sm:p-8 md:p-10">
+          {/* Invisible Honeypot Anti-Spam Field */}
+          <div
+            aria-hidden="true"
+            style={{
+              opacity: 0,
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              height: 0,
+              width: 0,
+              zIndex: -1,
+              overflow: 'hidden',
+              pointerEvents: 'none',
+            }}
+          >
+            <label htmlFor="demo_website_confirm">Website Confirmation</label>
+            <input
+              id="demo_website_confirm"
+              type="text"
+              name="website_confirm"
+              tabIndex={-1}
+              autoComplete="off"
+              value={formData.website_confirm}
+              onChange={(e) => setFormData({ ...formData, website_confirm: e.target.value })}
+            />
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 font-mono text-xs">
             <div className="space-y-2">
               <label className="block text-[#CCCCCC] uppercase tracking-wider">

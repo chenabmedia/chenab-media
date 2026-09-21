@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyServerAuth } from '@/lib/auth/serverAuth';
-import { adminDb, getAdminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 import { recordAuditLog } from '@/lib/firebase/audit';
 import { Release, ReleaseType } from '@/types';
 
@@ -46,7 +46,7 @@ export async function GET(
     return NextResponse.json({ release: releaseData }, { status: 200 });
   } catch (err: any) {
     console.error('Error fetching release:', err);
-    return NextResponse.json({ error: err.message || 'Failed to fetch release' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch release' }, { status: 500 });
   }
 }
 
@@ -420,7 +420,7 @@ export async function PATCH(
     );
   } catch (err: any) {
     console.error('Error updating release:', err);
-    return NextResponse.json({ error: err.message || 'Failed to update release' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update release' }, { status: 500 });
   }
 }
 
@@ -476,6 +476,6 @@ export async function DELETE(
     return NextResponse.json({ message: 'Release archived successfully' }, { status: 200 });
   } catch (err: any) {
     console.error('Error archiving release:', err);
-    return NextResponse.json({ error: err.message || 'Failed to archive release' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to archive release' }, { status: 500 });
   }
 }
